@@ -1,5 +1,2 @@
 whois
 requests
-time
-sys
-pprint
