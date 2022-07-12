@@ -93,6 +93,8 @@ Make a clean install:
 pip 3 install python-whois
 ```   
 
+Or simply use `virtualenv`
+
 <br>
 
 # Disclaimer ⚠️
