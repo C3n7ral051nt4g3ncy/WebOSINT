@@ -81,7 +81,7 @@ Domain reputation check with WhoisXML free API
 <br>
 
 # Potential Issues and Errors ❌
-Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were registered were being shown as not registered. I identified the problem/issue, some people have both whois and python-whois modules, and they were conflicting with each other. Fixing the issue will be:
+Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were `Registered` were being shown as `Not Registered`. Found the problem/issue, some people have both whois and python-whois modules, and they were conflicting with each other. Fixing the issue will be:
 ``` 
 pip3 uninstall whois
 ```   
