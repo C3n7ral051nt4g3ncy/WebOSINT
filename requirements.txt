@@ -1,5 +1,4 @@
 whois
-socket
 requests
 time
 sys
