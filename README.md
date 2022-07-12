@@ -66,8 +66,8 @@ Once the script starts, you have only very little typing to do:
 
 # API Keys 🔑
 In the `Config.json` file, just paste your API Keys inside the quotation marks `"API Key"` (see photo below)
-- It's **not an obligation** to pay for a Hacker Target API key you can leave that blank by typing **F** each time the tool asks you to choose between the Free search and the search using the API key.
-- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free, just go to the WhoisML website and join to get your key: (https://whois.whoisxmlapi.com)
+- It's **not an obligation** to pay for a Hacker Target API key you can leave that how it is, just choose the free search by typing **F** each time the tool asks you to choose between the Free search and the search using the API key.
+- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free, just go to the WhoisML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
 <br>
 
 <p align="center">
@@ -78,7 +78,7 @@ In the `Config.json` file, just paste your API Keys inside the quotation marks `
 <br>
 <br>
   
-# Tool Sequences ⛓️
+# Tool Sequence ⛓️
 
 ### [1]
 ``` 
@@ -86,11 +86,11 @@ Checking the domain is registered
 ```
 ### [2]
 ``` 
-Get the domain ip address
+Get the domain ip address and location data, Version, ASN
 ```
 ### [3]
 ``` 
-Reverse ip search and extract all domains with the same ip using HackerTarget free and paid API.
+Reverse ip search to extract all domains with the same ip (HackerTarget free and paid API)
 ``` 
 ### [4]
 ``` 
@@ -133,7 +133,7 @@ Or simply use `virtualenv` 🧠
 <br>
 
 # Tool Improvements 🔧
-Feel free to contribute and to change some code within the tool, submit a PR (Pull Request), or submit your thoughts here on github [discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions)
+Feel free to contribute and to change some code within the tool, submit a PR (Pull Request), or submit your thoughts here on github [Webosint discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions)
 <br>
 <br>
 
@@ -148,7 +148,7 @@ If you like this simple Python tool, feel free to donate to my work by clicking 
 <br>
 
 # Mention 🔊
-Thank you to [Hacker Target](https://hackertarget.com) for their great work and API which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API which provides a great opportunity for so many people in the Cyber community.
+Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API which provides a great opportunity for so many people in the Cyber community.
   
 <br>
   
