@@ -42,7 +42,7 @@ cd webosint
 ```
  
 ```
-pip3 install -r requirements.txt
+pip3 install -r requirements.txt and Pip3 install python-whois (if you don't have it)
 ```
   
 ```
@@ -79,7 +79,22 @@ Domain reputation check with WhoisXML free API
 ```   
 
 <br>
-  
+
+# Potential Issues and Errors ❌
+Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were registered were being shown as not registered. I identified the problem/issue, some people have both whois and python-whois modules, and they were conflicting with each other. Fixing the issue will be:
+``` 
+pip3 uninstall whois
+```   
+``` 
+pip3 uninstall python-whois
+``` 
+Make a clean install: 
+``` 
+pip 3 install python-whois
+```   
+
+<br>
+
 # Disclaimer ⚠️
 
 `This tool is for the OSINT and Cyber community, don't use it for wrong, immoral, or illegal reasons.`
@@ -110,6 +125,6 @@ Thank you to [Hacker Target](https://hackertarget.com) for their great work and 
 
 <br>
   
- <p align="center"><img width="833" height="233" src="https://user-images.githubusercontent.com/104733166/178512622-949c845e-6170-4994-ac5b-d3eaeb2cbd4b.png"></p>
+ <p align="center"><img width="933" height="166" src="https://user-images.githubusercontent.com/104733166/178512622-949c845e-6170-4994-ac5b-d3eaeb2cbd4b.png"></p>
 
 
