@@ -1,2 +1,2 @@
-whois
+python-whois
 requests
