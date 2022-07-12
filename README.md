@@ -46,7 +46,7 @@ cd webosint
 ```
  
 ```
-pip3 install -r requirements.txt and Pip3 install python-whois (if you don't have it)
+pip3 install -r requirements.txt
 ```
   
 ```
