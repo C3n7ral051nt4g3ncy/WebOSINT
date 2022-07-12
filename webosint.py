@@ -41,7 +41,7 @@ time.sleep(3)
 
 # What the script does (in order)
 print("[1]Domain Registration Check"
-      "\n[2]Get Domain IP"
+      "\n[2]Get Domain IP and IP Data"
       "\n[3]Reverse IP Search -extract Domains with same IP (HackerTarget API)"
       "\n[4]Get DNS Records (HackerTarget API)"
       "\n[5]Whois Domain Information"
