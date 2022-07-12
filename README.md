@@ -52,7 +52,30 @@ pip3 install -r requirements.txt and Pip3 install python-whois (if you don't hav
 ```
 python3 webosint.py
 ```
+<br>
 
+Once the script starts, you have only very little typing to do:
+``` 
+- Domain Name format example: google.com
+- To choose between yes and no: Type Y or y for Yes | N or n for No
+- Choose between a free search and API: Type F or f for the free search | API or api for the search with your API keys
+```  
+
+
+<br>
+
+# API Keys 🔑
+In the `Config.json` file, just paste your API Keys inside the quotation marks `"API Key"` (see photo below)
+- It's **not an obligation** to pay for a Hacker Target API key you can leave that blank by typing **F** each time the tool asks you to choose between the Free search and the search using the API key.
+- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free, just go to the WhoisML website and join to get your key: (https://whois.whoisxmlapi.com)
+<br>
+
+<p align="center">
+  <img width="490" height="320" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
+</p>
+
+
+<br>
 <br>
   
 # Tool Sequences ⛓️
@@ -96,6 +119,7 @@ Make a clean install:
 ``` 
 pip 3 install python-whois
 ```   
+
 <br>
   
 Or simply use `virtualenv` 🧠
