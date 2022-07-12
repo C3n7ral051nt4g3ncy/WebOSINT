@@ -85,7 +85,7 @@ Domain reputation check with WhoisXML free API
 <br>
 
 # Tool Improvements 🔧
-Feel free to contribute and to change some code within the tool, sumbit a PR (Pull Request), or submit your thoughts here on github discussions:
+Feel free to contribute and to change some code within the tool, sumbit a PR (Pull Request), or submit your thoughts here on github [discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions)
 <br>
 <br>
 
