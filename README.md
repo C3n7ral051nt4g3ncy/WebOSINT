@@ -54,11 +54,11 @@ python3 webosint.py
 ```
 <br>
 
-Once the script starts, you have only very little typing to do:
+Once the script starts, you have hardly any typing to do:
 ``` 
-- Domain Name format example: google.com
-- To choose between yes and no: Type Y or y for Yes | N or n for No
-- Choose between a free search and API: Type F or f for the free search | API or api for the search with your API keys
+- Domain format example: google.com
+- To choose between yes and no: Type Y or y for Yes  |  N or n for No
+- Choose between a free search and search with your API Key: Type -F or f for the free search | Type -API or api for the search with your API keys
 ```  
 
 
