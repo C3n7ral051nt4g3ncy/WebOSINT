@@ -2,7 +2,7 @@
 # File name          : webosint.py
 # Tool name          : W3b0s1nt
 # Author             : @C3n7ral051nt4g3ncy
-# Version            : V1.1.2
+# Version            : V1.1.3 (Added Domain CERT Search on 13th of July 2022)
 # Licence            : MIT
 # Script release     : July 2022
 
