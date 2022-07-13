@@ -1,2 +1,3 @@
 python-whois
 requests
+pycrtsh
