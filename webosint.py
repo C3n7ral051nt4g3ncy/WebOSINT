@@ -45,7 +45,8 @@ print("[1]Domain Registration Check"
       "\n[3]Reverse IP Search -extract Domains with same IP (HackerTarget API)"
       "\n[4]Get DNS Records (HackerTarget API)"
       "\n[5]Whois Domain Information"
-      "\n[6]Domain Reputation WhoisXML")
+      "\n[6]Domain CERT search (CRT.SH)"
+      "\n[7]Domain Reputation scan WhoisXML")
 
 
 with open('config.json', 'r') as f:
