@@ -15,6 +15,7 @@ import time
 import sys
 import json
 from pprint import pprint
+from pycrtsh import Crtsh
 
 # W3b0s1nt Banner
 print("""\033[0;35m
@@ -105,9 +106,9 @@ def rev_ip(domain_ip, domain):
         "\n\033[0;31m\U0001F6AB \033[1mHacker Target will give you a few tries for free, then you will need to change your ip or to use your API Key!!!\033[0m")
 
     choice = input("""\nType -F for Free Search, or Type -API for usage with your own API Key: """)
-    if choice == "-F" or choice == "-f" or choice =="F":
+    if choice == "-F" or choice == "-f" or choice =="F" or choice =="f":
         rev_ip_free(domain_ip, domain)
-    if choice == "-API" or choice == "-api" or choice=="API":
+    if choice == "-API" or choice == "-api" or choice=="API" or choice =="api":
         rev_ip_api(domain_ip, domain)
 
 
@@ -175,9 +176,9 @@ def dns_records(domain):
     Choose Free Search or API
     """
     choice = input("""\nType -F for Free Search, or Type -API for usage with your own API Key: """)
-    if choice == "-F" or choice == "-f" or choice=="F":
+    if choice == "-F" or choice == "-f" or choice=="F" or choice=="f":
         dns_records_free(domain)
-    if choice == "-API" or choice == "-api" or choice =="API":
+    if choice == "-API" or choice == "-api" or choice =="API" or choice =="api":
         dns_records_api(domain)
 
 
@@ -249,19 +250,38 @@ def whois_search():
     # Sleeping time so the user can view the results without the script moving too fast
     time.sleep(3)
 
-    choice = input("\n\nDo you want to run a domain reputation scan? y/n: ")
+    choice = input("\n\nCheck domain CERT (Certificate)? y/n: ")
+    if choice == "Y" or choice == "y":
+        crt_sh(domain_name)
+    if choice == "N" or choice == "n":
+        domain_reputation(domain_name)
+        
+        
+# Site Certificate search with CRT.SH
+def crt_sh(domain_name):
+  """
+  CERT search (site certificate
+  """
+    c = Crtsh()
+    certs = c.search(domain_name)
+    pprint(certs)
+
+    time.sleep(3)
+
+    choice = input("\n\nDomain reputation scan? y/n: ")
     if choice == "Y" or choice == "y":
         domain_reputation(domain_name)
     if choice == "N" or choice == "n":
         print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
         sys.exit(1)
 
+
 # Domain Reputation Scan
 def domain_reputation(domain_name):
     """
-    Domain reputation search
+    Domain reputation scan
     """
-    print("\nOK! Let's finish with a domain reputation check with WhoisXML API 👾 🔎 \n")
+    print("\nOK! Let's finish with a domain reputation scan with WhoisXML API 👾 🔎 \n")
     query = domain_name
     reputation = {"q": query}
     api = f"https://domain-reputation.whoisxmlapi.com/api/v2?apiKey={WHOIS_XML_API_KEY}&domainName={query}"
@@ -294,6 +314,7 @@ def main():
     dns_records_free()
     dns_records_api()
     whois_search()
+    crt_sh()
     domain_reputation()
 
 
