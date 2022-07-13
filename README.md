@@ -99,10 +99,15 @@ DNS records with HackerTarget free and Paid API
 ### [5]
 ``` 
 Whois domain information
-```   
+```
 ### [6]
 ``` 
-Domain reputation check with WhoisXML free API
+Domain CERT (Certificate) search using CRT.SH
+```   
+
+### [7]
+``` 
+Domain reputation sca, with WhoisXML free API
 ```   
 
 <br>
