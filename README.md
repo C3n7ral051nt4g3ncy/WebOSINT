@@ -31,7 +31,7 @@
 - [Python 3](https://www.python.org/downloads/)
 - Don't forget to install the requirements.txt
 - You will be limited in your search requests with the Hacker Target free API, you can purchase a Hacker Target membership and your API here: (https://hackertarget.com/scan-membership/)
-- For the WhoisXML API; this is an easy process and free, simply create an account and use the trial 500 free API requests:(https://whois.whoisxmlapi.com)
+- For the WhoisXML API; this is an easy process and free, simply create an account and use the trial 50 free API requests:(https://whois.whoisxmlapi.com)
 
 <br>
 
