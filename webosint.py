@@ -259,19 +259,16 @@ def whois_search():
         
 # Site Certificate search with CRT.SH
 def crt_sh(domain_name):
-  """
-  CERT search (site certificate
-  """
     c = Crtsh()
     certs = c.search(domain_name)
     pprint(certs)
-
+    
     time.sleep(3)
-
+    
     choice = input("\n\nDomain reputation scan? y/n: ")
     if choice == "Y" or choice == "y":
-        domain_reputation(domain_name)
-    if choice == "N" or choice == "n":
+      domain_reputation(domain_name)
+      if choice == "N" or choice == "n":
         print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
         sys.exit(1)
 
