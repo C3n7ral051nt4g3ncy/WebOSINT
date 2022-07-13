@@ -16,7 +16,7 @@ import sys
 import json
 from pprint import pprint
 
-# W3b0s1nt Banner.
+# W3b0s1nt Banner
 print("""\033[0;35m
 *═════════════════════════════════════════════════════════════════════*                                                               
 █  ██╗    ██╗██████╗ ██████╗  ██████╗ ███████╗ ██╗███╗   ██╗████████╗ █
@@ -38,9 +38,9 @@ print("""\033[0;35m
   \033[0m""")
 time.sleep(3)
 
-# What the script does (in order)
+# What the script does (Sequence)
 print("[1]Domain Registration Check"
-      "\n[2]Get Domain IP and Data (Location,ASN,Version)"
+      "\n[2]Get Domain IP + Data"
       "\n[3]Reverse IP Search -extract Domains with same IP (HackerTarget API)"
       "\n[4]Get DNS Records (HackerTarget API)"
       "\n[5]Whois Domain Information"
@@ -53,7 +53,7 @@ with open('config.json', 'r') as f:
 WHOIS_XML_API_KEY = config['WHOIS_XML_API_KEY']
 HACKERTARGET_API_KEY = config['HACKERTARGET_API_KEY']
 
-# Checking if the domain is registered.
+# Checking if the domain is registered
 def registrationstatus(domain_name):
     """
     Checking whether the domain is registered or not
@@ -75,7 +75,7 @@ print(domain, "\033[0;32m\033[1m is registered ✅ \033[0m" if registrationstatu
     domain) else "\033[0;31m\033[1m is not registered ❌ \033[0m")
 
 
-# Get domain IP Address.
+# Get domain IP Address
 def domain_ip():
     """
     Find Domain ip address
@@ -87,45 +87,37 @@ def domain_ip():
 
     ip_address = domain_ip
     response = requests.get(f'https://ipapi.co/{ip_address}/json/').json()
-    print("\nIP Location Data/ORG/ASN/Version:\n")
-    print(("City:") + response['city'])
-    print(("Country:") + response['country_name'])
-    print(("Country Capital:") + response['country_capital'])
-    print(("Country Code:") + response['country_code'])
-    print(("Continent Code:") + response['continent_code'])
-    print(("Organization:") + response['org'])
-    print(("ASN:") + response['asn'])
-    print(("Version:") + response['version'])
+    pprint(response)
 
-    choice = input("\n\nReverse Search ip using HackerTarget API? y/n: ")
+    choice = input("\n\nExtract domains with the same IP? y/n: ")
     if choice == "y" or choice == "Y":
         rev_ip(domain_ip, website)
     if choice == "n" or choice == "N":
         dns_records(website)
 
 
-# Reverse IP lookup intro - choice of limited free search or API Key usage.
+# Reverse IP lookup intro - choice of limited free search or API Key
 def rev_ip(domain_ip, domain):
     """
-    Choose Reverse ip for free or with API
+    Choose Reverse ip for free or with your API
     """
     print(
-        "\n\033[0;31m\U0001F6AB \033[1mHacker Target will give you a few tries, then you will need to change ip or to use an API Key!!!\033[0m")
+        "\n\033[0;31m\U0001F6AB \033[1mHacker Target will give you a few tries for free, then you will need to change your ip or to use your API Key!!!\033[0m")
 
-    choice = input("""\nChoose "F" for Free Search, or "API" for usage with your own API Key: """)
-    if choice == "F" or choice == "f":
+    choice = input("""\nType -F for Free Search, or Type -API for usage with your own API Key: """)
+    if choice == "-F" or choice == "-f" or choice =="F":
         rev_ip_free(domain_ip, domain)
-    if choice == "API" or choice == "api":
+    if choice == "-API" or choice == "-api" or choice=="API":
         rev_ip_api(domain_ip, domain)
 
 
-# Reverse IP lookup using limited searches with the Hacker Target free test API to extract all domains using the same IP.
+# Reverse IP lookup using limited searches with the Hacker Target free test API to extract all domains using the same IP
 def rev_ip_free(domain_ip, domain):
     """
     Reverse IP search for Free
     """
 
-    # Returning and printing the status code.
+    # Returning and printing the status code
     print("\n\033[0;32mOne moment ...checking Hacker Target status\033[0m")
     URL = 'http://api.hackertarget.com/reverseiplookup'
     request = requests.get(URL)
@@ -134,7 +126,7 @@ def rev_ip_free(domain_ip, domain):
     else:
         print('Response Failed, try again later')
 
-    # Free Hacker Target API with limited searches, user will need to regularly change IP address in order to make many daily searches !or to purchase the annual Hacker Target API Key).
+    # Free Hacker Target API with limited searches
     ht_api = "http://api.hackertarget.com/reverseiplookup"
     domain_ip = {"q": domain_ip}
     response = requests.request("GET", ht_api, params=domain_ip)
@@ -147,7 +139,7 @@ def rev_ip_free(domain_ip, domain):
         whois_search()
 
 
-# Reverse IP lookup using Hacker Target API to extract all domains using the same IP address.
+# Reverse IP lookup using Hacker Target API to extract all domains using the same IP address
 def rev_ip_api(domain_ip, domain):
     """
     Reverse IP search with API
@@ -162,7 +154,7 @@ def rev_ip_api(domain_ip, domain):
     else:
         print('Response Failed, try again later')
 
-    # Using your own Hacker Target API to avoid restrictions.
+    # Using your own Hacker Target API to avoid restrictions
     query = domain_ip
     domain_ip = {"q": query}
     api = f"https://api.hackertarget.com/reverseiplookup/?q={query}&apikey={HACKERTARGET_API_KEY}"
@@ -182,17 +174,14 @@ def dns_records(domain):
     """
     Choose Free Search or API
     """
-
-    print(
-        "\n\033[0;31m\U0001F6AB \033[1mHacker Target will give you a few tries, then you will need to change ip or to use your API Key!!!\033[0m")
-    choice = input("""\nChoose "F" for Free Search, or "API" for usage with your own API Key: """)
-    if choice == "F" or choice == "f":
+    choice = input("""\nType -F for Free Search, or Type -API for usage with your own API Key: """)
+    if choice == "-F" or choice == "-f" or choice=="F":
         dns_records_free(domain)
-    if choice == "API" or choice == "api":
+    if choice == "-API" or choice == "-api" or choice =="API":
         dns_records_api(domain)
 
 
-# Search DNS Records free.
+# Search DNS Records free
 def dns_records_free(domain):
     """
     DNS Records check
@@ -204,33 +193,31 @@ def dns_records_free(domain):
     response = requests.request("GET", dnsrecords_api, params=dns_records)
     print(response.text)
 
-    choice = input("\n\n\033[0;32m\033[1mcontinue to WHOis Search? y/n: \033[0m")
+    choice = input("\n\n\033[0;32m\033[1mTry WHOis Search? y/n: \033[0m")
     if choice == "y" or choice == "Y":
         whois_search()
     if choice == "n" or choice == "N":
         sys.exit(1)
 
 
-# Using your own Hacker Target API to avoid restrictions.
+# Using your own Hacker Target API to avoid restrictions
 def dns_records_api(domain):
     """
     DNS Records check with API
     """
-    # query = input(
-    #     """Domain name to check DNS RECORDS (for example "google.com" !!!Do not put www. before the domain): """)
     dns_records = {"q": domain}
     api = f"https://api.hackertarget.com/dnslookup/?q={domain}&apikey={HACKERTARGET_API_KEY}"
     response = requests.request("GET", api, params=dns_records)
     print(response.text)
 
-    choice = input("\n\n\033[0;32m\033[1mContinue to WHOIS Search? y/n: \033[0m")
+    choice = input("\n\n\033[0;32m\033[1mTry WHOis Search? y/n: \033[0m")
     if choice == "y" or choice == "Y":
         whois_search()
     if choice == "n" or choice == "N":
         sys.exit(1)
 
 
-# Search further domain information with the Whois module.
+# Search further domain information with the Whois module
 def whois_search():
     """
     WHOis information search
@@ -259,7 +246,7 @@ def whois_search():
     print("\nZipcode:", whois_information.zipcode)
     print("\nCountry:\033[0m", whois_information.country)
 
-    # Sleeping time so the user can view the results without the script moving too fast.
+    # Sleeping time so the user can view the results without the script moving too fast
     time.sleep(3)
 
     choice = input("\n\nDo you want to run a domain reputation scan? y/n: ")
@@ -269,27 +256,27 @@ def whois_search():
         print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
         sys.exit(1)
 
-
+# Domain Reputation Scan
 def domain_reputation(domain_name):
     """
     Domain reputation search
     """
-    print("\nOK! Let's finish with a domain reputation check with WhoisXML 👾 🔎 \n")
+    print("\nOK! Let's finish with a domain reputation check with WhoisXML API 👾 🔎 \n")
     query = domain_name
     reputation = {"q": query}
     api = f"https://domain-reputation.whoisxmlapi.com/api/v2?apiKey={WHOIS_XML_API_KEY}&domainName={query}"
     response = requests.request("GET", api, params=reputation)
-    print("\nDomain Reputation check results:\n")
+    print("\n\nDomain Reputation check results:\n\n")
     pprint(response.text)
     time.sleep(12)
 
-    # Farewell Goodbye End of Script Message.
+    # Farewell Goodbye End of Script Message
     print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
     sys.exit(1)
 
 
-# Choice to use Dig.
-choice = input("""\nFind domain IP address? y/n: """)
+# Choice to use Dig
+choice = input("""\nFind domain IP? y/n: """)
 if choice == "Y" or choice == "y":
     domain_ip()
 if choice == "N" or choice == "n":
