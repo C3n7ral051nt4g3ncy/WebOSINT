@@ -108,7 +108,7 @@ Domain reputation check with WhoisXML free API
 <br>
 
 # Potential Issues and Errors ❌
-Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were `Registered` were being shown as `Not Registered`. Found the problem/issue, some people have both whois and python-whois modules, and they were conflicting with each other. Fixing the issue will be:
+Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were `Registered` were being shown as `Not Registered`. Found the problem/issue, some people have both `whois` and  `python-whois` modules, and they were conflicting with each other. Fixing the issue will be:
 ``` 
 pip3 uninstall whois
 ```   
@@ -133,7 +133,7 @@ Or simply use `virtualenv` 🧠
 <br>
 
 # Tool Improvements 🔧
-Feel free to contribute and to change some code within the tool, submit a PR (Pull Request), or submit your thoughts here on github [Webosint discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions)
+Feel free to contribute and to change some code within the tool, submit a PR (Pull Request), or submit your thoughts here on github in the [Webosint discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions)
 <br>
 <br>
 
