@@ -66,8 +66,8 @@ Once the script starts, you have hardly any typing to do:
 
 # API Keys 🔑
 In the `Config.json` file, just paste your API Keys inside the quotation marks `"API Key"` (see photo below)
-- It's **not an obligation** to pay for a Hacker Target API key you can leave that how it is, just choose the free search by typing **F** each time the tool asks you to choose between the Free search and the search using the API key.
-- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (50 searches free each month), just go to the WhoisML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
+- It's **not an obligation** to pay for a Hacker Target API key, you can leave it how it is, just choose the free search by typing **-F** each time the tool asks you to choose between the Free search and the search using your API key.
+- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (50 searches each month), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
 <br>
 
 <p align="center">
