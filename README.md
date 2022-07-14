@@ -115,6 +115,15 @@ Domain reputation sca, with WhoisXML free API
 
 <br>
 
+# Terminal Scrollback Buffer 🔣
+Be ware that for the reverse IP search using the Hacker Target API, you are going to get a few hundred results for some websites, make sure that your Terminal Scrollback preferences are set to `unlimited scrollback` so that you will be able to scroll back up to see all results!
+
+<p align="center">
+<img width="333" src="https://user-images.githubusercontent.com/104733166/179029659-f1591798-d0e9-45d9-8dbb-c7de0a82585f.png"></p>
+
+
+<br>
+
 # Potential Issues and Errors ❌
 Before making this repository public, I gave private access to a few people, some were getting an error right at the beginning of the script and websites that were `Registered` were being shown as `Not Registered`. Found the problem/issue, some people have both `whois` and  `python-whois` modules, and they were conflicting with each other. Fixing the issue will be:
 ``` 
