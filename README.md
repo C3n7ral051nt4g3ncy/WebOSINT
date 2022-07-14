@@ -14,11 +14,8 @@
 <br>
 
 <div align="center">
-<img width="633" src="https://user-images.githubusercontent.com/104733166/178963228-616bf99b-242b-4ca3-89d2-0d405358d316.png"></div>
+<img width="633" src="https://user-images.githubusercontent.com/104733166/179068562-0969f9ee-b4c9-4b88-a902-a6b5c9fee69a.png"></div>
 
-
-
- 
 <br>
 <br>
 <br>
