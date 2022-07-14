@@ -74,7 +74,7 @@ In the `Config.json` file, just paste your API Keys inside the quotation marks `
 <br>
 
 <p align="center">
-  <img width="490" height="320" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
+  <img width="333" height="266" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
 </p>
 
 
