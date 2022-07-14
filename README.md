@@ -73,9 +73,7 @@ In the `Config.json` file, just paste your API Keys inside the quotation marks `
 - It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (50 searches each month), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
 <br>
 
-<p align="center">
-  <img width="420" height="330" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
-</p>
+  <img width="240" height="160" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
 
 
 <br>
