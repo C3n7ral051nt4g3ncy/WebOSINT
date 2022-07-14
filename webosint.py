@@ -13,6 +13,7 @@ import socket
 import requests
 import time
 import sys
+import readline
 import json
 from pprint import pprint
 from pycrtsh import Crtsh
