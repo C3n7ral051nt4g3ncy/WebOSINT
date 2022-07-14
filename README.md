@@ -157,10 +157,10 @@ Thank you to [Hacker Target](https://hackertarget.com) for their API and great w
   
 <br>
   
-<p align="center"><img width="433" height="233" src="https://user-images.githubusercontent.com/104733166/178512035-bb81cafc-f785-4426-9268-6634d3c2152d.png"></p>
+<p align="center"><img width="233" height="133" src="https://user-images.githubusercontent.com/104733166/178512035-bb81cafc-f785-4426-9268-6634d3c2152d.png"></p>
 
 <br>
   
- <p align="center"><img width="933" height="166" src="https://user-images.githubusercontent.com/104733166/178512622-949c845e-6170-4994-ac5b-d3eaeb2cbd4b.png"></p>
+ <p align="center"><img width="433" height="66" src="https://user-images.githubusercontent.com/104733166/178512622-949c845e-6170-4994-ac5b-d3eaeb2cbd4b.png"></p>
 
 
