@@ -9,13 +9,16 @@
 <br>
   
 <a href="https://github.com/C3n7ral051nt4g3ncy/webosint/blob/master/LICENSE"/> <img alt="Licence" src="https://img.shields.io/badge/LICENCE-MIT-purple">
-  
 </div>
   
 <br>
 
-<p align="center"> <img width="658" src="https://user-images.githubusercontent.com/104733166/178506130-02e6ebf5-2f81-4722-826b-3969b3da4e46.png"> <p/>
+<div align="center">
+<img width="633" src="https://user-images.githubusercontent.com/104733166/178963228-616bf99b-242b-4ca3-89d2-0d405358d316.png"></div>
 
+
+
+ 
 <br>
 <br>
 <br>
