@@ -23,7 +23,7 @@
 
 
 # W3b0s1nt 🌐
-**W3b0s1nt** is a Python script to gain intelligence on a domain.
+**WebOSINT** is a Python script to gather (passive) domain intelligence.
 
 <br>
 
@@ -81,7 +81,7 @@ In the `Config.json` file, just paste your API Keys inside the quotation marks `
 
 ### [1]
 ``` 
-Checking the domain is registered
+Checking if the domain is registered
 ```
 ### [2]
 ``` 
@@ -117,7 +117,7 @@ Subdomain Scanner
 <br>
 
 # Terminal Scrollback Buffer 🔣
-Be ware that for the reverse IP search using the Hacker Target API, you are going to get a few hundred results for some websites, make sure that your Terminal Scrollback preferences are set to `unlimited scrollback` so that you will be able to scroll back up to see all results!
+Be aware that for the reverse IP search using the Hacker Target API, you are going to get a few hundred results for some websites, make sure that your Terminal Scrollback preferences are set to `unlimited scrollback` so that you can scroll back up to see all results!
 
 <p align="center">
 <img width="333" src="https://user-images.githubusercontent.com/104733166/179029659-f1591798-d0e9-45d9-8dbb-c7de0a82585f.png"></p>
@@ -161,12 +161,12 @@ Feel free to contribute and to change some code within the tool, submit a PR (Pu
 <br>
   
 # Support 💜
-If you like this simple Python tool, feel free to donate to my work by clicking on the **KO-FI** Badge or the **BITCOIN** Badge at the top of this .readme file, you can also scan directly the BTC QR Code to get my BTC Address. 
+If you like this simple Python tool, feel free to donate to my work by clicking on the **KO-FI** Badge or the **BITCOIN** Badge at the top of this readme.md file, you can also scan my BTC QR Code directly to get my BTC Address. 
 
 <br>
 
 # Mention 🔊
-Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (50 searches per month) which provides a great opportunity for so many people in the Cyber community.
+Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (50 searches per month) which provides a great opportunity for the people in the Cyber community.
   
 <br>
   
