@@ -14,7 +14,8 @@
 <br>
 
 <div align="center">
-<img width="633" src="https://user-images.githubusercontent.com/104733166/179068562-0969f9ee-b4c9-4b88-a902-a6b5c9fee69a.png"></div>
+<img width="633" src="https://user-images.githubusercontent.com/104733166/179274067-9b94bcfd-d313-4545-aecc-742070b9fa72.png"></div>
+
 
 <br>
 <br>
@@ -105,7 +106,12 @@ Domain CERT (Certificate) search using CRT.SH
 
 ### [7]
 ``` 
-Domain reputation sca, with WhoisXML free API
+Domain reputation scan with WhoisXML free API
+```   
+
+### [8]
+``` 
+Subdomain Scanner 
 ```   
 
 <br>
