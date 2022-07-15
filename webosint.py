@@ -2,9 +2,10 @@
 # File name          : webosint.py
 # Tool name          : W3b0s1nt
 # Author             : @C3n7ral051nt4g3ncy
-# Version            : V1.1.3
+# Version            : V1.1.4
 # Licence            : MIT
 # Script release     : July 2022
+# Script Info         : WebOSINT is a passive Domain Intelligence recon tool, a Swiss army knife with 8 modules
 
 
 # Py Libs
@@ -28,7 +29,7 @@ print("""\033[0;35m
 █  ██║███╗██║ ╚═══██╗██╔══██╗████╔╝██║╚════██║ ██║██║╚██╗██║   ██║    █
 █  ╚███╔███╔╝██████╔╝██████╔╝╚██████╔╝███████║ ██║██║ ╚████║   ██║    █
 █   ╚══╝╚══╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝    █
-█ V1.1.3                                                              █
+█ V1.1.4                                                              █
 █ W3b0s1nt: Domain Intelligence                                       █                                                         
 *═════════════════════════════════════════════════════════════════════*\033[0m\033[0;32m 
   ╔═══════════════════════════════════════════════════════════════╗
@@ -41,6 +42,7 @@ print("""\033[0;35m
   \033[0m""")
 time.sleep(3)
 
+
 # What the script does (Sequence)
 print("[1]Domain Registration Check"
       "\n[2]Get Domain IP + Data"
@@ -48,7 +50,8 @@ print("[1]Domain Registration Check"
       "\n[4]Get DNS Records (HackerTarget API)"
       "\n[5]Whois Domain Information"
       "\n[6]Domain CERT search (CRT.SH)"
-      "\n[7]Domain Reputation scan WhoisXML")
+      "\n[7]Domain Reputation search WhoisXML"
+      "\n[8]Subdomain scan")
 
 
 with open('config.json', 'r') as f:
@@ -74,7 +77,7 @@ def registrationstatus(domain_name):
 print("\nLet's start by checking if the domain is registered!")
 query = input("\n\033[0;35m\033[1mDomain Name: \033[0m")
 domain = query
-print(domain, "\033[0;32m...searching for domain registration\n\n")
+print(domain, "\033[0;32m...searching for domain registration\n")
 print(domain, "\033[0;32m\033[1m is registered ✅ \033[0m" if registrationstatus(
     domain) else "\033[0;31m\033[1m is not registered ❌ \033[0m")
 
@@ -84,9 +87,10 @@ def domain_ip():
     """
     Find Domain ip address
     """
+
     website = query
     domain_ip = socket.gethostbyname(website)
-    print("\n\n\033[0;35m\033[1mDomain IP: \033[1m\033[0;32m\n")
+    print("\n\033[0;35m\033[1mDomain IP: \033[1m\033[0;32m\n")
     print(domain_ip)
 
     ip_address = domain_ip
@@ -99,6 +103,9 @@ def domain_ip():
         rev_ip(domain_ip, website)
     if choice == "n" or choice == "N":
         dns_records(website)
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
+        sys.exit(1)
 
 
 # Reverse IP lookup intro - choice of limited free search or API Key
@@ -106,6 +113,7 @@ def rev_ip(domain_ip, domain):
     """
     Choose Reverse ip for free or with your API
     """
+
     print(
         "\n\n\033[1m!!! Hacker Target will give you a few tries for free, then you will need to change your ip or to use your API Key!!!\033[0m")
 
@@ -114,6 +122,10 @@ def rev_ip(domain_ip, domain):
         rev_ip_free(domain_ip, domain)
     if choice == "-API" or choice == "-api" or choice=="API" or choice =="api":
         rev_ip_api(domain_ip, domain)
+
+    else:
+        print("You pressed the wrong key; choose -F for free search or -API for usage with your API Key, please start again")
+        sys.exit(1)
 
 
 # Reverse IP lookup using limited searches with the Hacker Target free test API to extract all domains using the same IP
@@ -126,10 +138,12 @@ def rev_ip_free(domain_ip, domain):
     print("\n\033[0;32mOne moment ...checking Hackertarget.com status\033[0m")
     URL = 'http://api.hackertarget.com/reverseiplookup'
     request = requests.get(URL)
+
     if request.status_code == 200:
         print("\n\033[0;32mstatus code 200!\033[0m Hacker Target is \033[0;32m\033[1monline\033[0m\033[0;35m\033[1m\n\nReverse IP search results:\033[0m\033[0;32m\n")
     else:
         print('\033[0;32mResponse Failed, try again later')
+
 
     # Free Hacker Target API with limited searches
     ht_api = "http://api.hackertarget.com/reverseiplookup"
@@ -143,12 +157,17 @@ def rev_ip_free(domain_ip, domain):
     if choice == "n" or choice == "N":
         whois_search()
 
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
+        sys.exit(1)
+
 
 # Reverse IP lookup using Hacker Target API to extract all domains using the same IP address
 def rev_ip_api(domain_ip, domain):
     """
     Reverse IP search with API
     """
+
     # Returning and printing the status code (200 means the server was reached).
     print("\n\033[0;32mOne moment ...checking Hackertarget.com status\033[0m")
     URL = 'http://api.hackertarget.com/reverseiplookup'
@@ -156,8 +175,10 @@ def rev_ip_api(domain_ip, domain):
     request = requests.get(URL)
     if request.status_code == 200:
         print("\n\n\033[0;32mstatus code 200!\033[0m Hacker Target is \033[0;32m\033[1monline\033[0m\033[0;35m\033[1m\n\nReverse IP search results:\033[0m\033[0;32m\n")
+
     else:
         print('\033[0;32mResponse Failed, try again later')
+
 
     # Using your own Hacker Target API to avoid restrictions
     query = domain_ip
@@ -166,12 +187,16 @@ def rev_ip_api(domain_ip, domain):
     response = requests.request("GET", api, params=domain_ip)
     print(response.text)
 
-    choice = input("\n\n\033[0;35m\033[1mcontinue to DNS Records search?\033[0m y/n: ")
+    choice = input("\n\n\033[0;35m\033[1mContinue to DNS Records search?\033[0m y/n: ")
 
     if choice == "y" or choice == "Y":
         dns_records(domain)
     if choice == "n" or choice == "N":
         whois_search()
+
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
+        sys.exit(1)
 
 
 # Search DNS Records (choose Free Search or using Hacker Target API KEY)
@@ -179,11 +204,16 @@ def dns_records(domain):
     """
     Choose Free Search or API
     """
+
     choice = input("""\n\033[0;35m\033[1mType -F for Free Search, or Type -API for usage with your own API Key: \033[0m""")
     if choice == "-F" or choice == "-f" or choice=="F" or choice=="f":
         dns_records_free(domain)
     if choice == "-API" or choice == "-api" or choice =="API" or choice =="api":
         dns_records_api(domain)
+
+    else:
+        print("You pressed the wrong key; choose -F for free search or -API for usage with your API Key, please start again")
+        sys.exit(1)
 
 
 # Search DNS Records free
@@ -191,6 +221,7 @@ def dns_records_free(domain):
     """
     DNS Records check
     """
+
     print("\n\033[0;35m\033[1mDNS Records search results:\033[0m\033[0;32m\n")
     dnsrecords_api = "https://api.hackertarget.com/dnslookup/"
 
@@ -202,6 +233,10 @@ def dns_records_free(domain):
     if choice == "y" or choice == "Y":
         whois_search()
     if choice == "n" or choice == "N":
+        sys.exit(1)
+
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
         sys.exit(1)
 
 
@@ -220,6 +255,10 @@ def dns_records_api(domain):
     if choice == "y" or choice == "Y":
         whois_search()
     if choice == "n" or choice == "N":
+        sys.exit(1)
+
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
         sys.exit(1)
 
 
@@ -260,6 +299,10 @@ def whois_search():
         crt_sh(domain_name)
     if choice == "N" or choice == "n":
         domain_reputation(domain_name)
+
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
+        sys.exit(1)
         
         
 # Site Certificate search with CRT.SH
@@ -267,15 +310,19 @@ def crt_sh(domain_name):
     c = Crtsh()
     certs = c.search(domain_name)
     print("\n\033[0;35m\033[1mWebsite cert. search results:\033[0m\n\033[0;32m")
-    pprint(certs[:2])
+    pprint(certs[:6])
     
     time.sleep(3)
     
     choice = input("\n\n\033[0;35m\033[1mDomain reputation scan?\033[0m y/n: ")
     if choice == "Y" or choice == "y":
       domain_reputation(domain_name)
-      if choice == "N" or choice == "n":
+    if choice == "N" or choice == "n":
         print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
+        sys.exit(1)
+
+    else:
+        print("You pressed the wrong key; choose Y or N, please start again")
         sys.exit(1)
 
 
@@ -284,18 +331,63 @@ def domain_reputation(domain_name):
     """
     Domain reputation scan
     """
-    print("\n\033[0;35m\033[1mOK! Let's finish with a domain reputation using WhoisXML API\n\033[0m")
+
+    print("\n\033[0;35m\033[1mOK! Let's check domain reputation using WhoisXML API\n\033[0m")
+
     query = domain_name
     reputation = {"q": query}
     api = f"https://domain-reputation.whoisxmlapi.com/api/v2?apiKey={WHOIS_XML_API_KEY}&domainName={query}"
     response = requests.request("GET", api, params=reputation)
+
     print("\n\n\033[0;35m\033[1mDomain Reputation check results:\n\n\033[0;32m")
     pprint(response.text)
-    time.sleep(12)
+
+
+    time.sleep(3)
+
+
+    choice = input("\n\n\033[0;35m\033[1mFinish up with a subdomain scan?\033[0m y/n: ")
+    if choice == "Y" or choice == "y":
+        subdomain_scanner(domain_name)
+    if choice == "N" or choice == "n":
+        print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
+        sys.exit(1)
+
+
+# WebOSINT Subscan (Subdomain Scanner)
+def subdomain_scanner(domain_name):
+
+    subdomains_found = []
+
+
+    sdsreq = requests.get(f'https://crt.sh/?q={domain_name}&output=json')
+
+    if sdsreq.status_code == 200:
+        print('\033[0;32m\033[1m\n\nScanning for subdomains now...')
+
+    else:
+        print("\033[0;32mThe subdomain scanner tool is currently offline, please try again in a few minutes!\033[0m")
+        sys.exit(1)
+
+    for (key, value) in enumerate(sdsreq.json()):
+        subdomains_found.append(value['name_value'])
+
+    print(f"\n\n\033[0;35m\033[1mYour chosen targeted Domain for the Subdomain scan:\033[0;32m{domain_name}\033[0m\033[0;32m\n")
+
+    subdomains = sorted(set(subdomains_found))
+
+    for sub_link in subdomains:
+        print(f'\033[1m[✅ Subdomain Found]\033[0m\033[0;32m -->{sub_link}')
+
+    print("\n\033[1m\033[0;35m\033[1mSubdomain Scan Completed ✔️  -\033[0;32m\033[1mALL Subdomains have been Found")
+
+    time.sleep(3)
+
 
     # Farewell Goodbye End of Script Message
     print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
     sys.exit(1)
+
 
 
 # Choice to use Dig
@@ -304,6 +396,10 @@ if choice == "Y" or choice == "y":
     domain_ip()
 if choice == "N" or choice == "n":
     dns_records(query)
+else:
+    print("You pressed the wrong key, please start again")
+    sys.exit(1)
+
 
 
 # Main.
@@ -319,6 +415,7 @@ def main():
     whois_search()
     crt_sh()
     domain_reputation()
+    subdomain_scanner()
 
 
 if __name__ == '__main__':
