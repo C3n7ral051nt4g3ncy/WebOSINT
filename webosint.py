@@ -20,6 +20,7 @@ import json
 from pprint import pprint
 from pycrtsh import Crtsh
 from dateutil.parser import parse
+from requests import get
 
 
 class MyCrtsh:
@@ -129,6 +130,32 @@ def domain_ip():
     response = requests.get(f'https://ipapi.co/{ip_address}/json/').json()
     print("\n\033[0;35m\033[1mIP Data:\n\033[0m\033[0;32m")
     pprint(response)
+
+    print("\n\n\033[0;35m\033[1mDouble IP verification using IPinfo.io")
+    print("\n\033[0;35m\033[1mResults:\033[0m\033[0;32m")
+    
+
+    response = requests.get(f'https://ipinfo.io/{ip_address}/json')
+    data = json.loads(response.text)
+
+    ip = data['ip']
+    organization = data['org']
+    city = data['city']
+    region = data['region']
+    country = data['country']
+    location = data['loc']
+    postal = data['postal']
+    timezone = data['timezone']
+
+    print("ip:", ip)
+    print("organization:", organization)
+    print("city:", city)
+    print("region:", region),
+    print("country:", country)
+    print("postal:", postal)
+    print("location:", location)
+    print("timezone", timezone)
+    
 
     choice = input("\n\n\033[0;35m\033[1mExtract domains with the same IP?\033[0m y/n: ")
     if choice == "y" or choice == "Y":
