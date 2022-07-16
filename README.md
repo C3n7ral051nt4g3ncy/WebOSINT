@@ -22,7 +22,7 @@
 <br>
 
 
-# W3b0s1nt 🌐
+# WebOSINT 🌐
 **WebOSINT** is a Python script to gather (passive) domain intelligence.
 
 <br>
