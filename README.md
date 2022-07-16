@@ -166,7 +166,7 @@ If you like this simple Python tool, feel free to donate to my work by clicking 
 <br>
 
 # Mention 🔊
-Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (50 searches per month) which provides a great opportunity for the people in the Cyber community.
+Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (50 searches per month) which provides a great opportunity for the people in the Cyber community. Thank you to [Euler Neto](https://github.com/netoeuler) for testing the script before release and finding 2 corrections to be made.
   
 <br>
   
