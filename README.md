@@ -85,7 +85,7 @@ Checking if the domain is registered
 ```
 ### [2]
 ``` 
-Get the domain ip address and location data, Version, ASN
+Get the domain ip address and location data, Version, ASN (Tool updated 16 July 2022, now with double IP verification)
 ```
 ### [3]
 ``` 
