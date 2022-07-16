@@ -9,15 +9,47 @@
 
 
 # Py Libs
+import re
 import whois
 import socket
 import requests
 import time
 import sys
-import readline
+# import readline
 import json
 from pprint import pprint
 from pycrtsh import Crtsh
+from dateutil.parser import parse
+
+
+class MyCrtsh:
+    def search(self, query, timeout=None):
+        """
+        Search crt.sh with the give query
+        Query can be domain, sha1, sha256...
+        """
+        r = requests.get('https://crt.sh/', params={'q': query, 'output': 'json'}, timeout=timeout)
+        nameparser = re.compile("([a-zA-Z]+)=(\"[^\"]+\"|[^,]+)")
+        certs = []
+        try:
+            for c in r.json():
+                if not c['entry_timestamp']:
+                    continue
+                certs.append({
+                    'id': c['id'],
+                    'logged_at': parse(c['entry_timestamp']),
+                    'not_before': parse(c['not_before']),
+                    'not_after': parse(c['not_after']),
+                    'name': c['name_value'],
+                    'ca': {
+                        'caid': c['issuer_ca_id'],
+                        'name': c['issuer_name'],
+                        'parsed_name': dict(nameparser.findall(c['issuer_name']))
+                    }
+                })
+        except json.decoder.JSONDecodeError:
+            pass
+        return certs
 
 
 # W3b0s1nt Banner
@@ -307,7 +339,7 @@ def whois_search():
         
 # Site Certificate search with CRT.SH
 def crt_sh(domain_name):
-    c = Crtsh()
+    c = MyCrtsh()
     certs = c.search(domain_name)
     print("\n\033[0;35m\033[1mWebsite cert. search results:\033[0m\n\033[0;32m")
     pprint(certs[:6])
