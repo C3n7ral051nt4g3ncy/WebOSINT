@@ -32,7 +32,7 @@
 - [Python 3](https://www.python.org/downloads/)
 - Don't forget to install the requirements.txt
 - You will be limited in your search requests with the Hacker Target free API, you can purchase a Hacker Target membership and your API here: (https://hackertarget.com/scan-membership/)
-- For the WhoisXML API; this is an easy process and free, simply create an account and use the trial 50 free API requests:(https://whois.whoisxmlapi.com)
+- For the WhoisXML API; this is an easy process and free, simply create an account and use the `trial 500 free API requests`  (Once you have used the 500 requests you will need to make a purchase, and if you don't want a yearly or monthly membership you can make one-time payments, `5000 queries for 100,00$ USD` or `1000 queries for 30,00$ USD`  :(https://whois.whoisxmlapi.com)
 
 <br>
 
@@ -68,7 +68,7 @@ Once the script starts, you have hardly any typing to do:
 # API Keys 🔑
 In the `Config.json` file, just paste your API Keys inside the quotation marks `"API Key"` (see photo below)
 - It's **not an obligation** to pay for a Hacker Target API key, you can leave it how it is, just choose the free search by typing **-F** each time the tool asks you to choose between the Free search and the search using your API key.
-- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (50 searches each month), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
+- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (`500 searches free`), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
 <br>
 
   <img width="240" height="160" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
