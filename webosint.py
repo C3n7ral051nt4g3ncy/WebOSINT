@@ -2,7 +2,7 @@
 # File name          : webosint.py
 # Tool name          : W3b0s1nt
 # Author             : @C3n7ral051nt4g3ncy
-# Version            : V1.1.4
+# Version            : V1.1.5
 # Licence            : MIT
 # Script release     : July 2022
 # Script Info         : WebOSINT is a passive Domain Intelligence recon tool, a Swiss army knife with 8 modules
@@ -84,7 +84,8 @@ print("[1]Domain Registration Check"
       "\n[5]Whois Domain Information"
       "\n[6]Domain CERT search (CRT.SH)"
       "\n[7]Domain Reputation search WhoisXML"
-      "\n[8]Subdomain scan")
+      "\n[8]Subdomain scan"
+      "\n[9]Historical Whois")
 
 
 with open('config.json', 'r') as f:
@@ -92,6 +93,7 @@ with open('config.json', 'r') as f:
 
 WHOIS_XML_API_KEY = config['WHOIS_XML_API_KEY']
 HACKERTARGET_API_KEY = config['HACKERTARGET_API_KEY']
+WHOIS_FREAKS_API_KEY = config['WHOIS_FREAKS_API_KEY']
 
 # Checking if the domain is registered
 def registrationstatus(domain_name):
@@ -405,16 +407,19 @@ def domain_reputation(domain_name):
     time.sleep(3)
 
 
-    choice = input("\n\n\033[0;35m\033[1mFinish up with a subdomain scan?\033[0m y/n: ")
+    choice = input("\n\n\033[0;35m\033[1mLet's do a subdomain scan?\033[0m y/n: ")
     if choice == "Y" or choice == "y":
         subdomain_scanner(domain_name)
     if choice == "N" or choice == "n":
-        print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
-        sys.exit(1)
+        whois_history(domain_name)
+
 
 
 # WebOSINT Subscan (Subdomain Scanner)
 def subdomain_scanner(domain_name):
+    """
+    Subdomain scan
+    """
 
     subdomains_found = []
 
@@ -442,11 +447,39 @@ def subdomain_scanner(domain_name):
 
     time.sleep(3)
 
+    choice = input("\n\n\033[0;35m\033[1mDo you want to finish with a Whois History search?\033[0m y/n: ")
+    if choice == "Y" or choice == "y":
+        whois_history(domain_name)
+    if choice == "N" or choice == "n":
+        print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
+        sys.exit(1)
+
+
+
+# Whois History using your WhoisFreaks API Key
+def whois_history(domain_name):
+    """
+    Whois History search
+    """
+
+    print("\n\033[0;35m\033[1mOK Let's do this and check Historical Whois using your Whois Freaks API ;-)\n\033[0m")
+
+    time.sleep(2)
+
+    print("\n\033[0;35m\033[1mHistorical Whois results:\n\n\033[0;32m")
+
+
+    query = domain_name
+    whoishistory = {"q": query}
+    api = f"https://api.whoisfreaks.com/v1.0/whois?apiKey={WHOIS_FREAKS_API_KEY}&whois=historical&domainName={query}"
+    response = requests.request("GET", api, params=whoishistory)
+    pprint(response.text)
+
+    time.sleep(3)
 
     # Farewell Goodbye End of Script Message
     print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
     sys.exit(1)
-
 
 
 # Choice to use Dig
@@ -475,6 +508,7 @@ def main():
     crt_sh()
     domain_reputation()
     subdomain_scanner()
+    whois_history()
 
 
 if __name__ == '__main__':
