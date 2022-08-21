@@ -14,7 +14,7 @@
 <br>
 
 <div align="center">
-<img width="633" src="https://user-images.githubusercontent.com/104733166/179274067-9b94bcfd-d313-4545-aecc-742070b9fa72.png"></div>
+<img width="633" src="https://user-images.githubusercontent.com/104733166/185790639-b1f09747-aea3-4f64-a52f-d70efd820a22.png"></div>
 
 
 <br>
@@ -67,8 +67,11 @@ Once the script starts, you have hardly any typing to do:
 
 # API Keys 🔑
 In the `Config.json` file, just paste your API Keys inside the quotation marks `"API Key"` (see photo below)
-- It's **not an obligation** to pay for a Hacker Target API key, you can leave it how it is, just choose the free search by typing **-F** each time the tool asks you to choose between the Free search and the search using your API key.
-- It's an **obligation** ✅ however to get yourself a WhoisXML Api key, this is free (`500 searches free`), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
+- It's **not an obligation** to pay for a **Hacker Target** API key, you can leave it how it is, just choose the free search by typing  `-F` each time the tool asks you to choose between the Free search and the search using your API key.
+- It's an **obligation** ✅ to get yourself a **WhoisXML** Api key, this is free (`500 searches free`), just go to the WhoisXML website and get an account to get your API key: (https://whois.whoisxmlapi.com)
+- It's also an **obligation** ✅ to get yourself a **WhoisFreaks** Api key, this is free (`100 searches free`), just go to the WhoisFreaks website and sign up to get your API key: (https://whoisfreaks.com)
+
+
 <br>
 
   <img width="240" height="160" src="https://user-images.githubusercontent.com/104733166/178601842-4945f6eb-b628-4c29-b890-01ba1c47fb69.png">
@@ -113,6 +116,12 @@ Domain reputation scan with WhoisXML free API
 ``` 
 Subdomain Scanner 
 ```   
+
+### [9]
+``` 
+Historical Whois Search with Whois Freaks free API
+```   
+
 
 <br>
 
@@ -161,12 +170,13 @@ Feel free to contribute and to change some code within the tool, submit a PR (Pu
 <br>
   
 # Support 💜
-If you like this simple Python tool, feel free to donate to my work by clicking on the **KO-FI** Badge or the **BITCOIN** Badge at the top of this readme.md file, you can also scan my BTC QR Code directly to get my BTC Address. 
+If you like this simple Python tool, feel free to donate to my work by clicking on the **KO-FI** Badge or the **BITCOIN** Badge at the top of this  `README.md` file, you can also scan my BTC QR Code directly to get my BTC Address. 
 
 <br>
 
 # Mention 🔊
-Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (50 searches per month) which provides a great opportunity for the people in the Cyber community. Thank you to [Euler Neto](https://github.com/netoeuler) for testing the script before release and finding 2 corrections to be made.
+Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (500 searches) which provides a great opportunity for the people in the Cyber community, and thanks to [Whois Freaks](https://whoisfreaks.com)for their free 100 search API Trial.
+Thanks to [@cipher387](https://github.com/cipher387)/[@cyb_detective](https://twitter.com/cyb_detective) and to [Euler Neto](https://github.com/netoeuler) for testing the script before release and finding 2 corrections to be made.
   
 <br>
   
@@ -175,5 +185,9 @@ Thank you to [Hacker Target](https://hackertarget.com) for their API and great w
 <br>
   
  <p align="center"><img width="433" height="66" src="https://user-images.githubusercontent.com/104733166/178512622-949c845e-6170-4994-ac5b-d3eaeb2cbd4b.png"></p>
+ 
+ <br>
+ 
+ <p align="center"><img width="166" height="133" src="https://user-images.githubusercontent.com/104733166/185790948-bc101640-be75-47d3-b437-9adf4737d3fa.png"></p>
 
 
