@@ -119,7 +119,7 @@ Subdomain Scanner
 
 ### [9]
 ``` 
-Historical Whois Search with Whois Freaks free API
+Historical Whois Search with WhoisFreaks free API (100 Free API Calls)
 ```   
 
 
