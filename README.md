@@ -176,7 +176,7 @@ If you like this simple Python tool, feel free to donate to my work by clicking 
 
 # Mention 🔊
 Thank you to [Hacker Target](https://hackertarget.com) for their API and great work which makes this tool possible, thank you also to [WHOisXML](https://main.whoisxmlapi.com) for their API as they make a free API (500 searches) which provides a great opportunity for the people in the Cyber community, and thanks to [Whois Freaks](https://whoisfreaks.com)for their free 100 search API Trial.
-Thanks to [@cipher387](https://github.com/cipher387)/[@cyb_detective](https://twitter.com/cyb_detective) and to [Euler Neto](https://github.com/netoeuler) for testing the script before release and finding 2 corrections to be made.
+Thanks to [@cipher387](https://github.com/cipher387)/[@cyb_detective](https://twitter.com/cyb_detective) and to [Euler Neto](https://github.com/netoeuler) for testing the script before release and finding 2 minor corrections.
   
 <br>
   
