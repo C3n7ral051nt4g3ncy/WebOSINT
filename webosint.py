@@ -33,10 +33,8 @@ class MyCrtsh:
         nameparser = re.compile("([a-zA-Z]+)=(\"[^\"]+\"|[^,]+)")
         certs = []
         try:
-            for c in r.json():
-                if not c['entry_timestamp']:
-                    continue
-                certs.append({
+            certs.extend(
+                {
                     'id': c['id'],
                     'logged_at': parse(c['entry_timestamp']),
                     'not_before': parse(c['not_before']),
@@ -45,9 +43,13 @@ class MyCrtsh:
                     'ca': {
                         'caid': c['issuer_ca_id'],
                         'name': c['issuer_name'],
-                        'parsed_name': dict(nameparser.findall(c['issuer_name']))
-                    }
-                })
+                        'parsed_name': dict(nameparser.findall(c['issuer_name'])),
+                    },
+                }
+                for c in r.json()
+                if c['entry_timestamp']
+            )
+
         except json.decoder.JSONDecodeError:
             pass
         return certs
@@ -135,7 +137,7 @@ def domain_ip():
 
     print("\n\n\033[0;35m\033[1mDouble IP verification using IPinfo.io")
     print("\n\033[0;35m\033[1mResults:\033[0m\033[0;32m")
-    
+
 
     response = requests.get(f'https://ipinfo.io/{ip_address}/json')
     data = json.loads(response.text)
@@ -157,12 +159,12 @@ def domain_ip():
     print("postal:", postal)
     print("location:", location)
     print("timezone", timezone)
-    
+
 
     choice = input("\n\n\033[0;35m\033[1mExtract domains with the same IP?\033[0m y/n: ")
-    if choice == "y" or choice == "Y":
+    if choice in ["y", "Y"]:
         rev_ip(domain_ip, website)
-    if choice == "n" or choice == "N":
+    if choice in ["n", "N"]:
         dns_records(website)
     else:
         print("You pressed the wrong key; choose Y or N, please start again")
@@ -179,9 +181,9 @@ def rev_ip(domain_ip, domain):
         "\n\n\033[1m!!! Hacker Target will give you a few tries for free, then you will need to change your ip or to use your API Key!!!\033[0m")
 
     choice = input("""\n\033[0;35m\033[1mType -F for Free Search, or Type -API for usage with your own API Key: \033[0m""")
-    if choice == "-F" or choice == "-f" or choice =="F" or choice =="f":
+    if choice in ["-F", "-f", "F", "f"]:
         rev_ip_free(domain_ip, domain)
-    if choice == "-API" or choice == "-api" or choice=="API" or choice =="api":
+    if choice in ["-API", "-api", "API", "api"]:
         rev_ip_api(domain_ip, domain)
 
     else:
@@ -213,9 +215,9 @@ def rev_ip_free(domain_ip, domain):
     print(response.text)
 
     choice = input("\n\n\033[0;35m\033[1mContinue to DNS Records search?\033[0m y/n: ")
-    if choice == "y" or choice == "Y":
+    if choice in ["y", "Y"]:
         dns_records(domain)
-    if choice == "n" or choice == "N":
+    if choice in ["n", "N"]:
         whois_search()
 
     else:
@@ -250,9 +252,9 @@ def rev_ip_api(domain_ip, domain):
 
     choice = input("\n\n\033[0;35m\033[1mContinue to DNS Records search?\033[0m y/n: ")
 
-    if choice == "y" or choice == "Y":
+    if choice in ["y", "Y"]:
         dns_records(domain)
-    if choice == "n" or choice == "N":
+    if choice in ["n", "N"]:
         whois_search()
 
     else:
@@ -267,9 +269,9 @@ def dns_records(domain):
     """
 
     choice = input("""\n\033[0;35m\033[1mType -F for Free Search, or Type -API for usage with your own API Key: \033[0m""")
-    if choice == "-F" or choice == "-f" or choice=="F" or choice=="f":
+    if choice in ["-F", "-f", "F", "f"]:
         dns_records_free(domain)
-    if choice == "-API" or choice == "-api" or choice =="API" or choice =="api":
+    if choice in ["-API", "-api", "API", "api"]:
         dns_records_api(domain)
 
     else:
@@ -291,14 +293,11 @@ def dns_records_free(domain):
     print(response.text)
 
     choice = input("\n\n\033[0;35m\033[1mDo a Whois scan? y/n: \033[0m")
-    if choice == "y" or choice == "Y":
+    if choice in ["y", "Y"]:
         whois_search()
-    if choice == "n" or choice == "N":
-        sys.exit(1)
-
-    else:
+    if choice not in ["n", "N"]:
         print("You pressed the wrong key; choose Y or N, please start again")
-        sys.exit(1)
+    sys.exit(1)
 
 
 # Using your own Hacker Target API to avoid restrictions
@@ -313,14 +312,11 @@ def dns_records_api(domain):
     print(response.text)
 
     choice = input("\n\n\033[0;35m\033[1mDo a Whois scan? y/n: \033[0m")
-    if choice == "y" or choice == "Y":
+    if choice in ["y", "Y"]:
         whois_search()
-    if choice == "n" or choice == "N":
-        sys.exit(1)
-
-    else:
+    if choice not in ["n", "N"]:
         print("You pressed the wrong key; choose Y or N, please start again")
-        sys.exit(1)
+    sys.exit(1)
 
 
 # Search further domain information with the Whois module
@@ -351,14 +347,14 @@ def whois_search():
     print("\nState:", whois_information.state)
     print("\nZipcode:", whois_information.zipcode)
     print("\nCountry:", whois_information.country)
-    
+
     # Sleeping time so the user can view the results without the script moving too fast
     time.sleep(3)
 
     choice = input("\n\n\033[0;35m\033[1mCheck domain CERT (Certificate)?\033[0m y/n: ")
-    if choice == "Y" or choice == "y":
+    if choice in ["Y", "y"]:
         crt_sh(domain_name)
-    if choice == "N" or choice == "n":
+    if choice in ["N", "n"]:
         domain_reputation(domain_name)
 
     else:
@@ -372,19 +368,18 @@ def crt_sh(domain_name):
     certs = c.search(domain_name)
     print("\n\033[0;35m\033[1mWebsite cert. search results:\033[0m\n\033[0;32m")
     pprint(certs[:6])
-    
-    time.sleep(3)
-    
-    choice = input("\n\n\033[0;35m\033[1mDomain reputation scan?\033[0m y/n: ")
-    if choice == "Y" or choice == "y":
-      domain_reputation(domain_name)
-    if choice == "N" or choice == "n":
-        print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
-        sys.exit(1)
 
+    time.sleep(3)
+
+    choice = input("\n\n\033[0;35m\033[1mDomain reputation scan?\033[0m y/n: ")
+    if choice in ["Y", "y"]:
+        domain_reputation(domain_name)
+    if choice in ["N", "n"]:
+        print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
     else:
         print("You pressed the wrong key; choose Y or N, please start again")
-        sys.exit(1)
+
+    sys.exit(1)
 
 
 # Domain Reputation Scan
@@ -408,9 +403,9 @@ def domain_reputation(domain_name):
 
 
     choice = input("\n\n\033[0;35m\033[1mLet's do a subdomain scan?\033[0m y/n: ")
-    if choice == "Y" or choice == "y":
+    if choice in ["Y", "y"]:
         subdomain_scanner(domain_name)
-    if choice == "N" or choice == "n":
+    if choice in ["N", "n"]:
         whois_history(domain_name)
 
 
@@ -421,9 +416,6 @@ def subdomain_scanner(domain_name):
     Subdomain scan
     """
 
-    subdomains_found = []
-
-
     sdsreq = requests.get(f'https://crt.sh/?q={domain_name}&output=json')
 
     if sdsreq.status_code == 200:
@@ -433,9 +425,7 @@ def subdomain_scanner(domain_name):
         print("\033[0;32mThe subdomain scanner tool is currently offline, please try again in a few minutes!\033[0m")
         sys.exit(1)
 
-    for (key, value) in enumerate(sdsreq.json()):
-        subdomains_found.append(value['name_value'])
-
+    subdomains_found = [value['name_value'] for value in sdsreq.json()]
     print(f"\n\n\033[0;35m\033[1mYour chosen targeted Domain for the Subdomain scan:\033[0;32m{domain_name}\033[0m\033[0;32m\n")
 
     subdomains = sorted(set(subdomains_found))
@@ -448,9 +438,9 @@ def subdomain_scanner(domain_name):
     time.sleep(3)
 
     choice = input("\n\n\033[0;35m\033[1mDo you want to finish with a Whois History search?\033[0m y/n: ")
-    if choice == "Y" or choice == "y":
+    if choice in ["Y", "y"]:
         whois_history(domain_name)
-    if choice == "N" or choice == "n":
+    if choice in ["N", "n"]:
         print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
         sys.exit(1)
 
@@ -484,9 +474,9 @@ def whois_history(domain_name):
 
 # Choice to use Dig
 choice = input("""\n\n\033[0;35m\033[1mFind domain IP?\033[0m  y/n: """)
-if choice == "Y" or choice == "y":
+if choice in ["Y", "y"]:
     domain_ip()
-if choice == "N" or choice == "n":
+if choice in ["N", "n"]:
     dns_records(query)
 else:
     print("You pressed the wrong key, please start again")
