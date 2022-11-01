@@ -30,7 +30,7 @@
   
 # Requirements 🐍
 - [Python 3](https://www.python.org/downloads/)
-- Don't forget to install the requirements.txt
+- Don't forget to install `requirements.txt`
 - You will be limited in your search requests with the Hacker Target free API, you can purchase a Hacker Target membership and your API here: (https://hackertarget.com/scan-membership/)
 - For the WhoisXML API; this is an easy process and free, simply create an account and use the `trial 500 free API requests`  (Once you have used the 500 requests you will need to make a purchase, and if you don't want a yearly or monthly membership you can make one-time payments, `5000 queries for 100,00$ USD` or `1000 queries for 30,00$ USD`  :(https://whois.whoisxmlapi.com)
 
@@ -55,7 +55,7 @@ python3 webosint.py
 ```
 <br>
 
-Once the script starts, you have hardly any typing to do:
+Once the script starts, you won't have much typing to do: 
 ``` 
 - Domain format example: google.com
 - To choose between yes and no: Type Y or y for Yes  |  N or n for No
