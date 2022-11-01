@@ -4,7 +4,7 @@
 # Author      : @C3n7ral051nt4g3ncy
 # Version     : V2.1
 # Licence     : MIT
-# Script Info : WebOSINT is a passive Domain Intelligence recon tool, a Swiss army knife with 8 modules
+# Script info : WebOSINT is a passive Domain Intelligence Recon Tool (a Swiss-Army knife) 
 
 
 # Py Libs
@@ -445,11 +445,11 @@ def subdomain_scanner(domain_name):
     for sub_link in subdomains:
         print(f'\033[1m[✅ Subdomain Found]\033[0m\033[0;32m -->{sub_link}')
 
-    print("\n\033[1m\033[0;35m\033[1mSubdomain Scan Completed ✔️  -\033[0;32m\033[1mALL Subdomains have been Found")
+    print("\n\033[1m\033[0;35m\033[1mSubdomain scan completed!  \033[0;32m\033[1m- ALL Subdomains have been Found")
 
     time.sleep(3)
 
-    choice = input("\n\n\033[0;35m\033[1mDo you want to finish with a Whois History search?\033[0m y/n: ")
+    choice = input("\n\n\033[0;35m\033[1mDo you want to finish by doing a Whois history search?\033[0m y/n: ")
     if choice == "Y" or choice == "y":
         whois_history(domain_name)
     if choice == "N" or choice == "n":
@@ -463,7 +463,7 @@ def whois_history(domain_name):
     Whois History search
     """
 
-    print("\n\033[0;35m\033[1mOK Let's do this and check Historical Whois using your Whois Freaks API ;-)\n\033[0m")
+    print("\n\033[0;35m\033[1mOK Let's do this and check historical Whois using your Whois Freaks API\n\033[0m")
 
     time.sleep(2)
 
@@ -478,7 +478,7 @@ def whois_history(domain_name):
     time.sleep(3)
 
     # Farewell Goodbye End of Script Message
-    print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of the W3b0s1nt Python script...")
+    print("\n\n\n\033[0;35m\033[1mBye Bye 😈 !!! You have reached the end of your domain Recon journey...")
     sys.exit(1)
 
 
