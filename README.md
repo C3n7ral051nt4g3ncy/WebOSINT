@@ -36,6 +36,12 @@
 
 <br>
 
+# Running the script with Docker 🐳
+```
+docker run -it scorpix06/webosint
+```
+
+
 # Installation ⚙️
 
 ```
