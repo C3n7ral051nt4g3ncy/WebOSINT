@@ -218,7 +218,22 @@ class Context:
             if r.status_code == 404:
                 return None
             r.raise_for_status()
-            return r.json()
+            d = r.json()
+            # Registries often publish only the registrar; the registrant record lives at the
+            # registrar's own RDAP server, linked with rel="related". Follow it (best effort).
+            for link in d.get("links", []):
+                href = link.get("href", "")
+                if link.get("rel") == "related" and "/domain/" in href.lower() and href != url:
+                    try:
+                        rr = self.session.get(href, timeout=self.timeout,
+                                              headers={"Accept": "application/rdap+json, application/json"})
+                        if rr.ok:
+                            d["_registrar_rdap"] = rr.json()
+                            d["_registrar_rdap_url"] = href
+                    except Exception:
+                        pass
+                    break
+            return d
         return self.cached("rdap", fetch)
 
     def internetdb(self, ip):
@@ -334,7 +349,10 @@ def parse_rdap(d):
             yield from walk(e.get("entities"))
 
     contacts = {}
-    for e in walk(d.get("entities")):
+    entities = list(walk((d.get("_registrar_rdap") or {}).get("entities"))) + list(walk(d.get("entities")))
+    if d.get("_registrar_rdap_url"):
+        out["registrar_rdap"] = d["_registrar_rdap_url"]
+    for e in entities:
         info = _vcard(e)
         for role in e.get("roles", []):
             if role == "registrar":
@@ -346,7 +364,7 @@ def parse_rdap(d):
                 if url:
                     out["registrar_url"] = url[0]
             elif info and role in ("registrant", "administrative", "technical", "abuse", "billing"):
-                contacts.setdefault(role, info)
+                contacts.setdefault(role, info)  # registrar data first (richer), then registry
     if contacts:
         out["contacts"] = contacts
     return {k: v for k, v in out.items() if v not in (None, "", [], {})}
@@ -534,7 +552,20 @@ def mod_whois(ctx):
             return {"error": "Domain not registered (RDAP 404)"}
         out = parse_rdap(d)
         if len(out) > 1:
-            out["source"] = "RDAP"
+            out["source"] = "RDAP (registry" + (" + registrar)" if d.get("_registrar_rdap") else ")")
+            if "registrant" not in out.get("contacts", {}):
+                try:  # owner details are sometimes only in classic WHOIS
+                    legacy = _whois_legacy(ctx)
+                    owner = {k: legacy[k] for k in ("name", "org", "emails", "address", "city", "state",
+                                                    "zipcode", "country") if legacy.get(k)}
+                    if owner:
+                        out.setdefault("contacts", {})["registrant (WHOIS)"] = owner
+                        out["source"] += " + WHOIS"
+                except Exception:
+                    pass
+            privacy = _privacy_flag(out.get("contacts", {}))
+            if privacy:
+                out["privacy"] = privacy
             return out
     except Exception as exc:
         errors.append(f"RDAP: {exc}")
@@ -547,6 +578,20 @@ def mod_whois(ctx):
     except Exception as exc:
         errors.append(f"WHOIS: {exc.__class__.__name__}: {exc}")
     raise RuntimeError(" | ".join(errors) or "no data")
+
+
+PRIVACY_MARKERS = ("redacted", "privacy", "withheld", "data protected", "not disclosed", "whoisguard",
+                   "domains by proxy", "contact privacy", "gdpr", "proxy")
+
+
+def _privacy_flag(contacts):
+    reg = {k: v for k, v in contacts.items() if k.startswith("registrant")}
+    if not reg:
+        return "no registrant published (GDPR redaction is the norm since 2018)"
+    blob = json.dumps(reg).lower()
+    if any(m in blob for m in PRIVACY_MARKERS):
+        return "registrant hidden behind a privacy/proxy service or redacted"
+    return None
 
 
 def _whois_legacy(ctx):
@@ -626,19 +671,32 @@ def mod_history(ctx):
     records = d.get("whois_domains_historical") or []
     hist = []
     for r in records:
-        reg = r.get("registrant_contact") or {}
-        hist.append({k: v for k, v in {
+        rec = {k: v for k, v in {
             "query_time": r.get("query_time"),
             "registrar": (r.get("domain_registrar") or {}).get("registrar_name"),
             "created": r.get("create_date"),
+            "updated": r.get("update_date"),
             "expires": r.get("expiry_date"),
-            "registrant_name": reg.get("name"),
-            "registrant_org": reg.get("company"),
-            "registrant_email": reg.get("email_address"),
-            "registrant_country": reg.get("country_name"),
+            "status": r.get("domain_status"),
             "name_servers": r.get("name_servers"),
-        }.items() if v})
-    return {"total_records": d.get("total_records", len(hist)), "records": hist}
+        }.items() if v}
+        # every *_contact block (registrant, administrative, technical, billing...), all fields
+        for ck, cv in r.items():
+            if ck.endswith("_contact") and isinstance(cv, dict):
+                fields = {f: v for f, v in cv.items() if v not in (None, "", [], {})}
+                if fields:
+                    rec[ck.replace("_contact", "")] = fields
+        hist.append(rec)
+    # owner changes over time are the interesting part: list distinct registrants
+    owners = uniq(json.dumps({k: v for k, v in (h.get("registrant") or {}).items()
+                              if k in ("name", "company", "email_address")}, sort_keys=True)
+                  for h in hist if h.get("registrant"))
+    owners = [json.loads(o) for o in owners if o != "{}"]
+    out = {"total_records": d.get("total_records", len(hist))}
+    if owners:
+        out["distinct_registrants"] = owners
+    out["records"] = hist
+    return out
 
 
 EXPOSURE_POLL = 5        # seconds between polls
