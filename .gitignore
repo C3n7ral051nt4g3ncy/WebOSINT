@@ -2,9 +2,12 @@
 __pycache__/
 *.pyc
 *.json
-!config.json
 *.md
 !README.md
 !webosint_screenshots.md
 *.html
 .DS_Store
+# private API keys: never commit
+config.json
+!config.example.json
+.env

@@ -46,7 +46,7 @@ try:
 except ImportError:
     dns = None
 
-VERSION = "3.0"
+VERSION = "3.1"
 USER_AGENT = f"WebOSINT/{VERSION} (+https://github.com/C3n7ral051nt4g3ncy/WebOSINT)"
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
@@ -196,6 +196,21 @@ class Context:
                              "or conflicting 'whois' package installed")
         return self.cached("whois", lambda: whois.whois(self.domain))
 
+    def rdap(self):
+        """RDAP (the JSON successor of WHOIS). Mandatory for every gTLD (.sarl, .xyz, .app...),
+        also offered by many ccTLDs (.fr, .uk, .nl...). Returns the RDAP JSON, or None if the
+        registry answered 404 (domain not registered)."""
+        def fetch():
+            base = rdap_base(self, self.domain.rsplit(".", 1)[-1])
+            url = (base or "https://rdap.org/").rstrip("/") + "/domain/" + self.domain
+            r = self.session.get(url, timeout=self.timeout,
+                                 headers={"Accept": "application/rdap+json, application/json"})
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()
+        return self.cached("rdap", fetch)
+
     def ips(self):
         def resolve():
             v4, v6 = [], []
@@ -216,17 +231,131 @@ class Context:
 
 
 # --------------------------------------------------------------------------- #
+# RDAP helpers
+# --------------------------------------------------------------------------- #
+RDAP_BOOTSTRAP = "https://data.iana.org/rdap/dns.json"
+RDAP_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "webosint", "rdap_dns.json")
+_rdap_lock = threading.Lock()
+_rdap_map = None
+
+
+def rdap_base(ctx, tld):
+    """Find the registry's RDAP server for a TLD using IANA's bootstrap file (cached 7 days)."""
+    global _rdap_map
+    with _rdap_lock:
+        if _rdap_map is None:
+            data = None
+            try:
+                if os.path.exists(RDAP_CACHE) and time.time() - os.path.getmtime(RDAP_CACHE) < 7 * 86400:
+                    with open(RDAP_CACHE, encoding="utf-8") as fh:
+                        data = json.load(fh)
+            except (OSError, ValueError):
+                data = None
+            if data is None:
+                try:
+                    data = ctx.get(RDAP_BOOTSTRAP).json()
+                    os.makedirs(os.path.dirname(RDAP_CACHE), exist_ok=True)
+                    with open(RDAP_CACHE, "w", encoding="utf-8") as fh:
+                        json.dump(data, fh)
+                except Exception:
+                    data = {"services": []}
+            _rdap_map = {}
+            for tlds, urls in data.get("services", []):
+                https = [u for u in urls if u.startswith("https")] or urls
+                for t in tlds:
+                    _rdap_map[t.lower()] = https[0]
+        return _rdap_map.get(tld.lower())
+
+
+def _vcard(entity):
+    """Flatten an RDAP entity's jCard into a small dict."""
+    out = {}
+    for item in (entity.get("vcardArray") or [None, []])[1]:
+        name, params, _, val = (item + [None] * 4)[:4]
+        if name == "fn" and val:
+            out["name"] = val
+        elif name == "org" and val:
+            out["org"] = val if isinstance(val, str) else " ".join(map(str, val))
+        elif name == "email" and val:
+            out.setdefault("email", val)
+        elif name == "tel" and val:
+            out.setdefault("phone", str(val).replace("tel:", ""))
+        elif name == "adr":
+            label = (params or {}).get("label") if isinstance(params, dict) else None
+            if isinstance(val, list):
+                parts = [p if isinstance(p, str) else " ".join(p) for p in val if p]
+                if parts:
+                    out["address"] = ", ".join(x for x in parts if x)
+                    if parts and len(parts[-1]) <= 3:
+                        out["country"] = parts[-1]
+            elif label:
+                out["address"] = label.replace("\n", ", ")
+    return out
+
+
+def parse_rdap(d):
+    out = {"domain_name": d.get("ldhName") or d.get("unicodeName")}
+    for ev in d.get("events", []):
+        action = ev.get("eventAction", "")
+        key = {"registration": "creation_date", "expiration": "expiration_date",
+               "last changed": "updated_date", "transfer": "last_transfer"}.get(action)
+        if key:
+            out[key] = ev.get("eventDate")
+    out["status"] = d.get("status")
+    out["name_servers"] = sorted(n.get("ldhName", "").lower() for n in d.get("nameservers", []) if n.get("ldhName"))
+    sec = d.get("secureDNS") or {}
+    if "delegationSigned" in sec:
+        out["dnssec"] = "signed" if sec["delegationSigned"] else "unsigned"
+    out["whois_server"] = d.get("port43")
+
+    def walk(entities):
+        for e in entities or []:
+            yield e
+            yield from walk(e.get("entities"))
+
+    contacts = {}
+    for e in walk(d.get("entities")):
+        info = _vcard(e)
+        for role in e.get("roles", []):
+            if role == "registrar":
+                out["registrar"] = info.get("name") or info.get("org") or e.get("handle")
+                iana = [p.get("identifier") for p in e.get("publicIds", []) if "IANA" in p.get("type", "")]
+                if iana:
+                    out["registrar_iana_id"] = iana[0]
+                url = [l.get("href") for l in e.get("links", []) if l.get("rel") in ("about", "self")]
+                if url:
+                    out["registrar_url"] = url[0]
+            elif info and role in ("registrant", "administrative", "technical", "abuse", "billing"):
+                contacts.setdefault(role, info)
+    if contacts:
+        out["contacts"] = contacts
+    return {k: v for k, v in out.items() if v not in (None, "", [], {})}
+
+
+# --------------------------------------------------------------------------- #
 # Modules — each returns a JSON-serialisable dict
 # --------------------------------------------------------------------------- #
 def mod_registration(ctx):
     try:
+        return {"registered": ctx.rdap() is not None, "source": "RDAP"}
+    except Exception:
+        pass
+    try:
         w = ctx.whois()
-        registered = bool(w.domain_name)
+        if w.domain_name:
+            return {"registered": True, "source": "WHOIS"}
+        return {"registered": False, "source": "WHOIS"}
     except SkipModule:
         raise
+    except Exception as exc:
+        if "no match" in str(exc).lower() or "not found" in str(exc).lower():
+            return {"registered": False, "source": "WHOIS"}
+    # neither source answered: say so instead of guessing "not registered"
+    try:
+        ctx.ips()
+        return {"registered": True, "source": "DNS (domain resolves; RDAP/WHOIS unavailable)"}
     except Exception:
-        registered = False
-    return {"registered": registered}
+        return {"registered": None, "source": "unknown (RDAP and WHOIS both unavailable for this TLD)"}
 
 
 def mod_ip(ctx):
@@ -317,6 +446,29 @@ WHOIS_FIELDS = ("domain_name", "registrar", "whois_server", "creation_date", "ex
 
 
 def mod_whois(ctx):
+    errors = []
+    try:
+        d = ctx.rdap()
+        if d is None:
+            return {"error": "Domain not registered (RDAP 404)"}
+        out = parse_rdap(d)
+        if len(out) > 1:
+            out["source"] = "RDAP"
+            return out
+    except Exception as exc:
+        errors.append(f"RDAP: {exc}")
+    try:
+        out = _whois_legacy(ctx)
+        out["source"] = "WHOIS (port 43)"
+        return out
+    except SkipModule as exc:
+        errors.append(f"WHOIS: {exc}")
+    except Exception as exc:
+        errors.append(f"WHOIS: {exc.__class__.__name__}: {exc}")
+    raise RuntimeError(" | ".join(errors) or "no data")
+
+
+def _whois_legacy(ctx):
     w = ctx.whois()
     out = {}
     for f in WHOIS_FIELDS:
@@ -327,7 +479,7 @@ def mod_whois(ctx):
         if v:
             out[f] = to_jsonable(v)
     if not out:
-        return {"error": "No WHOIS data returned"}
+        raise RuntimeError("no WHOIS data returned")
     return out
 
 
@@ -445,11 +597,11 @@ def mod_exposure(ctx):
 
 # key, title, function, short description
 MODULES = [
-    ("registration", "Domain Registration", mod_registration, "Is the domain registered?"),
+    ("registration", "Domain Registration", mod_registration, "Is the domain registered? (RDAP/WHOIS)"),
     ("ip",           "IP Address & Geolocation", mod_ip, "A/AAAA + ipinfo.io / ipapi.co data"),
     ("reverse_ip",   "Reverse IP (shared hosting)", mod_reverse_ip, "Other domains on the same IP (HackerTarget)"),
     ("dns",          "DNS Records", mod_dns, "A, AAAA, MX, NS, TXT, SOA, CAA, DMARC"),
-    ("whois",        "WHOIS", mod_whois, "Registrar, dates, contacts"),
+    ("whois",        "WHOIS / RDAP", mod_whois, "Registrar, dates, contacts (RDAP, WHOIS fallback)"),
     ("certs",        "SSL Certificates", mod_certs, "Certificate Transparency (crt.sh)"),
     ("subdomains",   "Subdomains", mod_subdomains, "Subdomains seen in CT logs (crt.sh)"),
     ("reputation",   "Domain Reputation", mod_reputation, "WhoisXML reputation  [API key]"),
@@ -547,7 +699,11 @@ def print_report(report, full=False):
             continue
         d = res["data"]
         if key == "registration":
-            print(f"    {C.G}✅ registered{C.X}" if d["registered"] else f"    {C.R}❌ not registered (or WHOIS unavailable){C.X}")
+            if d["registered"] is None:
+                print(f"    {C.Y}? unknown{C.X}  {C.D}{d.get('source', '')}{C.X}")
+            else:
+                print((f"    {C.G}✅ registered" if d["registered"] else f"    {C.R}❌ not registered")
+                      + f"{C.X}  {C.D}({d.get('source', '')}){C.X}")
         elif key == "reverse_ip" and "domains" in d:
             print(f"    {C.D}{d['count']} domain(s) on {d['ip']} — {d['source']}{C.X}")
             print_list(d["domains"], limit)
@@ -704,8 +860,11 @@ def _html_module(key, res):
         return f'<p class="err">Error: {_h(res["reason"])}</p>'
     d = res["data"]
     if key == "registration":
+        src = f'<p class="note">source: {_h(d.get("source", ""))}</p>'
+        if d["registered"] is None:
+            return '<p class="big warn">● UNKNOWN</p>' + src
         return ('<p class="big yes">● REGISTERED</p>' if d["registered"]
-                else '<p class="big no">● NOT REGISTERED / WHOIS UNAVAILABLE</p>')
+                else '<p class="big no">● NOT REGISTERED</p>') + src
     if key == "reverse_ip" and "domains" in d:
         return f'<p class="note">{d["count"]} domain(s) on {_h(d["ip"])} · {_h(d["source"])}</p>' + \
             _html_list(d["domains"], "domains")
@@ -736,8 +895,8 @@ def _kpis(rep):
 
     tiles = []
     if data("registration") is not None:
-        tiles.append(("Registered", "YES" if data("registration")["registered"] else "NO",
-                      not data("registration")["registered"]))
+        reg = data("registration")["registered"]
+        tiles.append(("Registered", "?" if reg is None else ("YES" if reg else "NO"), not reg))
     if data("ip") and "ipv4" in data("ip"):
         tiles.append(("IP addresses", len(data("ip")["ipv4"]) + len(data("ip").get("ipv6", [])), False))
     if data("subdomains"):

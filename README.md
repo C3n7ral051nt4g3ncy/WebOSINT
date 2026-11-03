@@ -6,7 +6,7 @@
 
 **Passive domain intelligence from your terminal: one command, ten sources, a few seconds.**
 
-<img src="https://img.shields.io/badge/version-3.0-purple?style=flat-square"/>
+<img src="https://img.shields.io/badge/version-3.1-purple?style=flat-square"/>
 <img src="https://img.shields.io/badge/python-3.8%2B-purple?style=flat-square&logo=python&logoColor=white"/>
 <img src="https://img.shields.io/badge/recon-passive-purple?style=flat-square"/>
 <img src="https://img.shields.io/badge/docker-ready-purple?style=flat-square&logo=docker&logoColor=white"/>
@@ -16,7 +16,7 @@
 <a href="https://ko-fi.com/tacticalintelanalyst"><img alt="Ko-fi" src="https://img.shields.io/badge/Ko--fi-support-purple?style=for-the-badge&logo=ko-fi&logoColor=white"/></a>
 <a href="https://user-images.githubusercontent.com/104733166/171052611-1f76b07c-832f-4a4a-9a0a-2f94595c28c9.png"><img alt="BTC" src="https://img.shields.io/badge/Bitcoin-donate-purple?style=for-the-badge&logo=bitcoin&logoColor=white"/></a>
 
-[Quick start](#-quick-start) · [Usage](#-usage) · [HTML report](#-html-report) · [Modules](#-modules) · [API keys](#-api-keys) · [Docker](#-docker) · [Troubleshooting](#-troubleshooting) · [Changelog](#-whats-new-in-v30)
+[Quick start](#-quick-start) · [Usage](#-usage) · [HTML report](#-html-report) · [Modules](#-modules) · [API keys](#-api-keys) · [Docker](#-docker) · [Troubleshooting](#-troubleshooting) · [Changelog](#-whats-new-in-v31)
 
 </div>
 
@@ -149,11 +149,11 @@ In interactive mode, WebOSINT asks *"Save an HTML report?"* at the end. Press En
 
 | # | Module | What it reveals for the investigation | Source | Key |
 |:-:|---|---|---|:-:|
-| 1 | `registration` | Whether the domain is registered (available, parked, or recently dropped domains) | WHOIS | — |
+| 1 | `registration` | Whether the domain is registered (available, parked, or recently dropped domains) | RDAP · WHOIS | — |
 | 2 | `ip` | IPv4/IPv6, hosting provider, ASN, geolocation, cross-checked by two services | DNS · ipinfo.io · ipapi.co | — |
 | 3 | `reverse_ip` | Other domains on the same IP: shared hosting, sister sites, related infrastructure | HackerTarget | optional |
 | 4 | `dns` | A, AAAA, CNAME, MX (mail provider), NS, TXT (SPF, site verifications for Google/Microsoft/etc.), SOA, CAA, DMARC | local resolver (dnspython) | — |
-| 5 | `whois` | Registrar, creation/expiry/update dates, name servers, contact details when not redacted | WHOIS | — |
+| 5 | `whois` | Registrar (+ IANA ID), creation/expiry/update dates, status, name servers, DNSSEC, registrant/abuse contacts when not redacted | RDAP · WHOIS fallback | — |
 | 6 | `certs` | Number of certificates, first-seen date (a good proxy for when the site went live), issuers, latest certs | crt.sh | — |
 | 7 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh | — |
 | 8 | `reputation` | Reputation score plus failed security tests (malware, SSL, mail config) | WhoisXML | required |
@@ -206,6 +206,12 @@ docker run --rm -v "$PWD:/out" webosint example.com -o /out/result.json
 ## 🩺 Troubleshooting
 
 <details>
+<summary><b>WHOIS fails for a domain that exists</b></summary>
+
+Since v3.1, WebOSINT asks the registry's **RDAP** server first (found through IANA's bootstrap list, cached in `~/.cache/webosint/`). If a TLD has neither RDAP nor a WHOIS server python-whois knows, the error message shows what each source answered.
+</details>
+
+<details>
 <summary><b>Registered domains show as "not registered", or WHOIS is skipped</b></summary>
 
 You probably have both the `whois` and `python-whois` packages installed, and they conflict. WebOSINT detects this and tells you. Fix it with a clean install, ideally in a virtualenv:
@@ -241,6 +247,11 @@ Use `--full`, or export with `-o result.json` / `--md report.md`. Exports always
 </details>
 
 ---
+
+## ✨ What's new in v3.1
+
+- 🧾 **RDAP support.** WHOIS and registration checks now query **RDAP** first (the structured JSON successor of WHOIS, mandatory for every gTLD) and fall back to classic WHOIS. New gTLDs such as `.sarl`, `.app`, `.xyz` or `.paris`, which python-whois can't read, now return full results.
+- 🎯 **No more false "not registered".** If no registry answers, WebOSINT says so (or confirms registration from DNS) instead of guessing.
 
 ## ✨ What's new in v3.0
 
