@@ -254,15 +254,52 @@ class Context:
             return {"ipv4": uniq(v4), "ipv6": uniq(v6)}
         return self.cached("ips", resolve)
 
-    def crtsh(self):
+    def ct_logs(self):
+        """Certificate Transparency rows, normalised. crt.sh first; Cert Spotter (free, no key)
+        as automatic backup when crt.sh is down, overloaded or answers 404/empty."""
         def fetch():
-            r = self.get("https://crt.sh/", params={"q": f"%.{self.domain}", "output": "json"},
-                         timeout=max(self.timeout, 60))
-            try:
-                return r.json()
-            except ValueError:
-                raise RuntimeError("crt.sh returned a non-JSON answer (service overloaded, retry later)")
-        return self.cached("crtsh", fetch)
+            notes = []
+            for q in (f"%.{self.domain}", self.domain):
+                try:
+                    r = self.session.get("https://crt.sh/", params={"q": q, "output": "json"},
+                                         timeout=max(self.timeout, 60))
+                    if r.status_code == 404:
+                        notes.append(f"crt.sh: no result for {q}")
+                        continue
+                    r.raise_for_status()
+                    rows = r.json()
+                    if rows:
+                        if q == self.domain:  # apex query: also pick up names on the same certs
+                            pass
+                        return {"rows": rows, "source": "crt.sh", "notes": notes}
+                    notes.append(f"crt.sh: empty answer for {q}")
+                except ValueError:
+                    notes.append("crt.sh: non-JSON answer (overloaded)")
+                    break
+                except Exception as exc:
+                    notes.append(f"crt.sh: {exc.__class__.__name__}")
+                    break
+            # backup: SSLMate Cert Spotter
+            r = self.session.get("https://api.certspotter.com/v1/issuances",
+                                 params=[("domain", self.domain), ("include_subdomains", "true"),
+                                         ("expand", "dns_names"), ("expand", "issuer")],
+                                 timeout=max(self.timeout, 30))
+            r.raise_for_status()
+            rows = []
+            for c in r.json():
+                iss = c.get("issuer") or {}
+                rows.append({
+                    "id": c.get("id"),
+                    "entry_timestamp": c.get("not_before"),
+                    "not_before": c.get("not_before"),
+                    "not_after": c.get("not_after"),
+                    "name_value": "\n".join(c.get("dns_names") or []),
+                    "common_name": "",
+                    "issuer_name": "O=" + (iss.get("friendly_name") or iss.get("name") or "?"),
+                    "url": f"https://crt.sh/?q={self.domain}",
+                })
+            return {"rows": rows, "source": "Cert Spotter (crt.sh unavailable)", "notes": notes}
+        return self.cached("ct", fetch)
 
 
 # --------------------------------------------------------------------------- #
@@ -360,7 +397,7 @@ def parse_rdap(d):
                 iana = [p.get("identifier") for p in e.get("publicIds", []) if "IANA" in p.get("type", "")]
                 if iana:
                     out["registrar_iana_id"] = iana[0]
-                url = [l.get("href") for l in e.get("links", []) if l.get("rel") in ("about", "self")]
+                url = [l.get("href") for l in e.get("links", []) if l.get("rel") == "about"]
                 if url:
                     out["registrar_url"] = url[0]
             elif info and role in ("registrant", "administrative", "technical", "abuse", "billing"):
@@ -610,9 +647,9 @@ def _whois_legacy(ctx):
 
 
 def mod_certs(ctx):
-    rows = ctx.crtsh()
+    ct = ctx.ct_logs()
     certs = {}
-    for c in rows:
+    for c in ct["rows"]:
         certs.setdefault(c.get("id"), c)  # crt.sh returns one row per name
     certs = sorted(certs.values(), key=lambda c: c.get("entry_timestamp") or "", reverse=True)
     issuers = {}
@@ -627,23 +664,27 @@ def mod_certs(ctx):
         "not_after": c.get("not_after"),
         "names": uniq(c.get("name_value", "").split("\n")),
         "issuer": c.get("issuer_name"),
-        "url": f"https://crt.sh/?id={c.get('id')}",
+        "url": c.get("url") or f"https://crt.sh/?id={c.get('id')}",
     } for c in certs[:10]]
-    return {"total": len(certs),
-            "first_seen": certs[-1].get("not_before") if certs else None,
-            "issuers": dict(sorted(issuers.items(), key=lambda kv: -kv[1])),
-            "latest": latest}
+    out = {"total": len(certs),
+           "first_seen": min((c.get("not_before") or "9") for c in certs) if certs else None,
+           "issuers": dict(sorted(issuers.items(), key=lambda kv: -kv[1])),
+           "latest": latest, "source": ct["source"]}
+    if not certs:
+        out["note"] = "No certificate found in CT logs (" + "; ".join(ct["notes"]) + ")"
+    return out
 
 
 def mod_subdomains(ctx):
+    ct = ctx.ct_logs()
     names = set()
-    for c in ctx.crtsh():
+    for c in ct["rows"]:
         for n in (c.get("name_value", "") + "\n" + c.get("common_name", "")).split("\n"):
             n = n.strip().lower().lstrip("*.")
             if n and "@" not in n and (n == ctx.domain or n.endswith("." + ctx.domain)):
                 names.add(n)
     subs = sorted(names)
-    return {"count": len(subs), "subdomains": subs, "source": "crt.sh (Certificate Transparency)"}
+    return {"count": len(subs), "subdomains": subs, "source": ct["source"] + " (Certificate Transparency)"}
 
 
 def mod_reputation(ctx):
@@ -723,15 +764,45 @@ def mod_exposure(ctx):
                 "note": f"Lunar is still generating the report after {EXPOSURE_MAX_WAIT}s. "
                         f"Run again in a minute: webosint.py {ctx.domain} -m exposure"}
     period = report.get("period") or {"from": data.get("periodFrom"), "to": data.get("periodTo")}
-    out = {"status": data.get("status"),
-           "period": {k: v for k, v in period.items() if v},
-           "summary": report.get("summary") or {}}
-    # keep any extra breakdowns (malware families, services...) as they come
-    for k, v in report.items():
-        if k not in ("domain", "generated_at", "period", "summary") and v:
-            out[k] = v
+    summary = report.get("summary") or {}
+    total = summary.get("total_events") or 0
+    out = {"period": f"{period.get('from', '?')} → {period.get('to', '?')}",
+           "total_events": total}
+    if not total:
+        out["verdict"] = "No infostealer or data-breach exposure found for this domain in the period."
+    else:
+        out["verdict"] = f"{total} exposure event(s) found."
+        out["summary"] = _nonzero(summary)
+        for k in ("infostealer_summary", "data_breach_summary", "exposure_subject_breakdown",
+                  "event_family_breakdown", "data_breach_source_type_breakdown"):
+            v = _nonzero(report.get(k))
+            if v:
+                out[k] = v
+        months = [m for m in report.get("monthly_timeline") or [] if m.get("total_events")]
+        if months:
+            out["active_months"] = [{"month": m.get("month"), "total": m.get("total_events"),
+                                     "infostealer": m.get("infostealer_events"),
+                                     "data_breach": m.get("data_breach_events")} for m in months]
+        # anything else Lunar adds later (malware families, services, login URLs...)
+        for k, v in report.items():
+            if k not in out and k not in ("domain", "generated_at", "period", "summary", "monthly_timeline"):
+                v = _nonzero(v)
+                if v:
+                    out[k] = v
     out["source"] = "Lunar Domain Exposure API (lunarcyber.com)"
+    out["_raw"] = report  # full answer kept in JSON exports, hidden in terminal/HTML
     return out
+
+
+def _nonzero(v):
+    """Drop zeros / empties recursively so only meaningful figures are shown."""
+    if isinstance(v, dict):
+        r = {k: _nonzero(x) for k, x in v.items()}
+        return {k: x for k, x in r.items() if x not in (None, 0, 0.0, "", [], {})}
+    if isinstance(v, list):
+        r = [_nonzero(x) for x in v]
+        return [x for x in r if x not in (None, 0, "", [], {})]
+    return v
 
 
 # key, title, function, short description
@@ -742,8 +813,8 @@ MODULES = [
     ("reverse_ip",   "Reverse IP (shared hosting)", mod_reverse_ip, "Other domains on the same IP (HackerTarget + Shodan)"),
     ("dns",          "DNS Records", mod_dns, "A, AAAA, MX, NS, TXT, SOA, CAA, DMARC"),
     ("whois",        "WHOIS / RDAP", mod_whois, "Registrar, dates, contacts (RDAP, WHOIS fallback)"),
-    ("certs",        "SSL Certificates", mod_certs, "Certificate Transparency (crt.sh)"),
-    ("subdomains",   "Subdomains", mod_subdomains, "Subdomains seen in CT logs (crt.sh)"),
+    ("certs",        "SSL Certificates", mod_certs, "Certificate Transparency (crt.sh, Cert Spotter backup)"),
+    ("subdomains",   "Subdomains", mod_subdomains, "Hostnames seen in CT logs (crt.sh, Cert Spotter backup)"),
     ("reputation",   "Domain Reputation", mod_reputation, "WhoisXML reputation  [API key]"),
     ("history",      "WHOIS History", mod_history, "Historical WHOIS, WhoisFreaks  [API key]"),
     ("exposure",     "Credential Exposure", mod_exposure, "Infostealer/breach exposure (Lunar, free)"),
@@ -803,7 +874,7 @@ def _fmt(v):
 def print_kv(d, indent=4):
     pad = " " * indent
     for k, v in d.items():
-        if v in (None, "", [], {}):
+        if v in (None, "", [], {}) or str(k).startswith("_"):
             continue
         if isinstance(v, dict):
             print(f"{pad}{C.B}{k}{C.X}")
@@ -895,7 +966,9 @@ def to_markdown(reports):
             if res["status"] != "ok":
                 lines += [f"_{res['status']}: {res.get('reason', res.get('data', {}).get('error', ''))}_", ""]
                 continue
-            lines += ["```json", json.dumps(res["data"], indent=2, ensure_ascii=False, default=str), "```", ""]
+            shown = {k: v for k, v in res["data"].items() if not str(k).startswith("_")} \
+                if isinstance(res["data"], dict) else res["data"]
+            lines += ["```json", json.dumps(shown, indent=2, ensure_ascii=False, default=str), "```", ""]
     return "\n".join(lines)
 
 
@@ -903,82 +976,129 @@ def to_markdown(reports):
 # HTML report (self-contained, works offline)
 # --------------------------------------------------------------------------- #
 HTML_CSS = r"""
-:root{--bg:#05060b;--panel:#0b0d17cc;--line:#1d2140;--txt:#d7dcff;--dim:#7a80a8;
---neon:#b04cff;--neon2:#39ffb0;--warn:#ffcc4d;--bad:#ff4d6d;--mono:ui-monospace,"SF Mono",
-"JetBrains Mono",Menlo,Consolas,monospace}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.55 var(--mono);
-background-image:linear-gradient(#b04cff0d 1px,transparent 1px),linear-gradient(90deg,#b04cff0d 1px,transparent 1px),
-radial-gradient(ellipse at top,#2a0f4a 0%,transparent 60%);background-size:32px 32px,32px 32px,100% 100%;
+:root{--bg:#05060b;--panel:#0a0c16e6;--panel2:#0e1120;--line:#1f2444;--txt:#dfe3ff;--dim:#8a90b8;
+--neon:#b04cff;--neon2:#39ffb0;--warn:#ffcc4d;--bad:#ff4d6d;--mono:ui-monospace,"SF Mono","JetBrains Mono",
+Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 var(--mono);
+background-image:linear-gradient(#b04cff0b 1px,transparent 1px),linear-gradient(90deg,#b04cff0b 1px,transparent 1px),
+radial-gradient(ellipse at top,#2a0f4a 0%,transparent 55%);background-size:36px 36px,36px 36px,100% 100%;
 background-attachment:fixed}
 body:after{content:"";position:fixed;inset:0;pointer-events:none;
-background:repeating-linear-gradient(0deg,#ffffff05 0 1px,transparent 1px 3px)}
-a{color:var(--neon2);text-decoration:none}a:hover{text-decoration:underline}
-.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 60px}
-header{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(6px);
-padding:22px 24px;position:relative;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px))}
-header:before{content:"";position:absolute;left:0;top:0;height:2px;width:100%;
+background:repeating-linear-gradient(0deg,#ffffff04 0 1px,transparent 1px 3px)}
+a{color:var(--neon2);text-decoration:none;word-break:break-all}a:hover{text-decoration:underline}
+.wrap{max-width:1500px;margin:0 auto;padding:28px 28px 70px}
+
+/* header */
+.hero{border:1px solid var(--line);background:var(--panel);padding:28px 32px;position:relative;overflow:hidden;
+clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,26px 100%,0 calc(100% - 26px))}
+.hero:before{content:"";position:absolute;left:0;top:0;height:2px;width:100%;
 background:linear-gradient(90deg,var(--neon),var(--neon2),transparent);animation:scan 4s linear infinite}
 @keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-.brand{color:var(--neon);letter-spacing:.35em;font-size:12px;text-transform:uppercase}
-h1{margin:6px 0 4px;font-size:clamp(22px,4vw,34px);letter-spacing:.04em;color:#fff;
-text-shadow:0 0 12px #b04cff99,0 0 30px #b04cff55;word-break:break-all}
-.meta{color:var(--dim);font-size:12px}.meta b{color:var(--neon2);font-weight:400}
-nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
-nav a{border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--dim);background:#0b0d17}
+.brand{color:var(--neon);letter-spacing:.4em;font-size:12px;text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:clamp(26px,5vw,46px);letter-spacing:.03em;color:#fff;
+text-shadow:0 0 14px #b04cff99,0 0 34px #b04cff55;word-break:break-all}
+.meta{color:var(--dim);font-size:13px}.meta b{color:var(--neon2);font-weight:400}
+
+/* sticky nav */
+nav{position:sticky;top:0;z-index:5;display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+margin:18px 0;padding:10px 0;background:linear-gradient(var(--bg) 70%,transparent)}
+nav a{border:1px solid var(--line);padding:5px 11px;font-size:12px;color:var(--dim);background:#0b0d17;word-break:normal}
 nav a:hover{border-color:var(--neon);color:#fff;text-decoration:none}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0 26px}
-.kpi{border:1px solid var(--line);background:var(--panel);padding:14px 16px;position:relative}
-.kpi:after{content:"";position:absolute;right:8px;top:8px;width:6px;height:6px;background:var(--neon2);
+nav a .dot{display:inline-block;width:6px;height:6px;margin-right:6px;vertical-align:middle}
+nav .sp{flex:1}
+
+/* KPI tiles */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:6px 0 28px}
+.kpi{border:1px solid var(--line);background:var(--panel);padding:16px 18px;position:relative}
+.kpi:after{content:"";position:absolute;right:10px;top:10px;width:7px;height:7px;background:var(--neon2);
 box-shadow:0 0 8px var(--neon2)}
-.kpi .v{font-size:26px;color:#fff;text-shadow:0 0 10px #39ffb066}.kpi .l{color:var(--dim);font-size:11px;
-text-transform:uppercase;letter-spacing:.15em}
+.kpi .v{font-size:30px;color:#fff;text-shadow:0 0 10px #39ffb066;line-height:1.2}
+.kpi .l{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.15em;margin-top:4px}
 .kpi.bad .v{color:var(--bad);text-shadow:0 0 10px #ff4d6d66}.kpi.bad:after{background:var(--bad);box-shadow:0 0 8px var(--bad)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px;align-items:start}
-details.card{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(6px)}
-details.card[open]{border-color:#b04cff55;box-shadow:0 0 0 1px #b04cff22,0 0 40px -20px var(--neon)}
-summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;
-border-bottom:1px solid transparent}summary::-webkit-details-marker{display:none}
-details[open] summary{border-bottom-color:var(--line)}
-summary .n{color:var(--neon);font-size:11px}summary .t{flex:1;color:#fff;letter-spacing:.05em}
-summary .s{font-size:11px;color:var(--dim)}
-.pill{font-size:10px;padding:2px 8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid}
+
+/* full-width module blocks */
+.stack{display:flex;flex-direction:column;gap:20px}
+details.card{border:1px solid var(--line);background:var(--panel);width:100%}
+details.card[open]{border-color:#b04cff55;box-shadow:0 0 0 1px #b04cff1f,0 0 60px -30px var(--neon)}
+details.card.st-error{border-left:3px solid var(--bad)}details.card.st-skipped{border-left:3px solid var(--warn)}
+details.card.st-ok{border-left:3px solid var(--neon2)}
+summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:16px;padding:16px 22px}
+summary::-webkit-details-marker{display:none}
+details[open] summary{border-bottom:1px solid var(--line);background:#ffffff03}
+summary .n{color:var(--neon);font-size:13px;min-width:34px}
+summary .tt{flex:1;min-width:0}
+summary .t{color:#fff;font-size:19px;letter-spacing:.04em}
+summary .d{color:var(--dim);font-size:12px;margin-top:2px}
+summary .s{font-size:12px;color:var(--dim);white-space:nowrap}
+summary .chev{color:var(--dim);transition:transform .2s}details[open] summary .chev{transform:rotate(90deg)}
+.pill{font-size:11px;padding:3px 10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid;white-space:nowrap}
 .ok{color:var(--neon2);border-color:#39ffb066}.skipped{color:var(--warn);border-color:#ffcc4d66}
 .error{color:var(--bad);border-color:#ff4d6d66}
-.body{padding:12px 16px 16px;overflow-x:auto}
-table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px dashed #1d214099;
-vertical-align:top;text-align:left;word-break:break-word}
-th{color:var(--dim);font-weight:400;white-space:nowrap;width:1%;padding-right:18px}
-td{color:var(--txt)}.tag{color:var(--neon);white-space:nowrap}
-.note{color:var(--dim);margin:0 0 10px;font-size:12px}.err{color:var(--bad)}.warn{color:var(--warn)}
-ul.list{list-style:none;margin:0;padding:0;max-height:420px;overflow:auto;columns:2 260px;column-gap:24px}
-ul.list li{padding:2px 0;break-inside:avoid;word-break:break-all}ul.list li:before{content:"› ";color:var(--neon)}
-input.filter{width:100%;background:#05060b;border:1px solid var(--line);color:#fff;padding:7px 10px;
-font:inherit;margin-bottom:10px;outline:none}input.filter:focus{border-color:var(--neon);box-shadow:0 0 12px -4px var(--neon)}
-.big{font-size:18px}.yes{color:var(--neon2)}.no{color:var(--bad)}
-footer{margin-top:40px;color:var(--dim);font-size:11px;text-align:center;letter-spacing:.1em}
+.body{padding:20px 22px 24px}
+
+/* field grid: label above value, uses the full width */
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin:0 0 16px}
+.f{background:var(--panel2);border:1px solid var(--line);padding:10px 14px;min-width:0}
+.f.wide{grid-column:1/-1}
+.f .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:3px}
+.f .v{color:var(--txt);word-break:break-word}
+h3{margin:18px 0 10px;font-size:12px;font-weight:400;color:var(--neon);letter-spacing:.2em;text-transform:uppercase}
+h3:first-child{margin-top:0}
+.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:16px}
+.panel{border:1px solid var(--line);background:var(--panel2);padding:14px 16px;min-width:0}
+.panel .ph{color:var(--neon);font-size:12px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px}
+.kv .k{color:var(--dim)}.kv .v{word-break:break-word;min-width:0}
+
+/* tables */
+.tbl{width:100%;overflow-x:auto;border:1px solid var(--line);margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);font-weight:400;text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.1em;
+padding:10px 12px;background:#ffffff05;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px dashed #1f244499;vertical-align:top;word-break:normal;overflow-wrap:break-word}
+tr:hover td{background:#b04cff0a}
+td.tag,.tag{color:var(--neon);white-space:nowrap}
+
+/* chips & lists */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#0b0d17;padding:3px 10px;font-size:13px}
+.chip.g{color:var(--neon2);border-color:#39ffb055}.chip.r{color:var(--bad);border-color:#ff4d6d55}
+.chip.p{color:#e7c8ff;border-color:#b04cff55}.chip.y{color:var(--warn);border-color:#ffcc4d55}
+.note{color:var(--dim);margin:0 0 14px;font-size:13px}.err{color:var(--bad)}.warn{color:var(--warn)}
+.verdict{font-size:20px;margin:0 0 14px}.yes{color:var(--neon2)}.no{color:var(--bad)}
+ul.list{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto;
+display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2px 24px}
+ul.list li{padding:3px 0;word-break:break-all}ul.list li:before{content:"› ";color:var(--neon)}
+input.filter{width:100%;background:#05060b;border:1px solid var(--line);color:#fff;padding:9px 12px;
+font:inherit;margin-bottom:12px;outline:none}input.filter:focus{border-color:var(--neon);box-shadow:0 0 12px -4px var(--neon)}
+.count{color:var(--dim);font-size:12px;margin:-6px 0 10px}
+
+footer{margin-top:44px;color:var(--dim);font-size:12px;text-align:center;letter-spacing:.1em}
 footer b{color:var(--neon)}
-.domain{margin-top:34px}
-@media (max-width:640px){table,tbody,tr,th,td{display:block;width:auto}th{padding:6px 0 0;border:0}
-td{padding:0 0 6px 12px}.wrap{padding:16px 12px 40px}}
-@media print{body{background:#fff;color:#000}body:after,header:before{display:none}
-details.card{break-inside:avoid}ul.list{max-height:none}}
+.domain+.domain{margin-top:60px}
+@media (max-width:700px){.wrap{padding:16px 12px 40px}summary{flex-wrap:wrap;gap:8px 12px;padding:14px}
+summary .tt{flex-basis:calc(100% - 50px)}.hero{padding:20px}.body{padding:14px}
+.kv{grid-template-columns:1fr}.kv .k{margin-top:6px}
+.tbl table{width:max-content;min-width:100%}.tbl td{word-break:normal;overflow-wrap:normal;max-width:260px}}
+@media print{body{background:#fff;color:#000}body:after,.hero:before,nav{display:none}details.card{break-inside:avoid}
+ul.list{max-height:none}}
 """
 
 HTML_JS = r"""
 document.querySelectorAll('input.filter').forEach(function(inp){
+  var list=inp.parentNode.querySelector('ul.list'),cnt=inp.parentNode.querySelector('.count');
   inp.addEventListener('input',function(){
-    var q=inp.value.toLowerCase(),list=inp.nextElementSibling,shown=0;
+    var q=inp.value.toLowerCase(),n=0;
     list.querySelectorAll('li').forEach(function(li){
-      var m=li.textContent.toLowerCase().indexOf(q)>-1;li.style.display=m?'':'none';if(m)shown++;});
-    inp.setAttribute('data-count',shown);
+      var m=li.textContent.toLowerCase().indexOf(q)>-1;li.style.display=m?'':'none';if(m)n++;});
+    if(cnt)cnt.textContent=n+' shown';
   });
 });
-document.getElementById('toggle').addEventListener('click',function(e){
+document.querySelectorAll('.toggle').forEach(function(t){t.addEventListener('click',function(e){
   e.preventDefault();var cards=document.querySelectorAll('details.card');
-  var open=[].some.call(cards,function(c){return !c.open});
-  cards.forEach(function(c){c.open=open});
-});
+  var open=[].some.call(cards,function(c){return !c.open});cards.forEach(function(c){c.open=open});
+});});
 """
 
 
@@ -987,29 +1107,103 @@ def _h(v):
     return _html.escape(str(v), quote=True)
 
 
-def _html_value(v):
-    if isinstance(v, dict):
-        return _html_table(v)
-    if isinstance(v, list):
-        if v and isinstance(v[0], dict):
-            return "".join(f'<div style="margin:6px 0 10px">{_html_table(i)}</div>' for i in v)
-        return "<br>".join(_h(x) for x in v)
+def _label(k):
+    return str(k).replace("_", " ")
+
+
+def _link(u, text=None):
+    return f'<a href="{_h(u)}" target="_blank" rel="noopener noreferrer">{_h(text or u)}</a>'
+
+
+def _scalar(v):
+    if isinstance(v, bool):
+        return "yes" if v else "no"
     s = str(v)
     if s.startswith(("http://", "https://")):
-        return f'<a href="{_h(s)}" target="_blank" rel="noopener noreferrer">{_h(s)}</a>'
+        return _link(s)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}T[\d:.]+Z?", s):  # ISO timestamps -> readable
+        return _h(s.replace("T", " ").rstrip("Z").split(".")[0])
     return _h(s)
 
 
-def _html_table(d):
-    rows = "".join(f"<tr><th>{_h(k.replace('_', ' '))}</th><td>{_html_value(v)}</td></tr>"
-                   for k, v in d.items() if v not in (None, "", [], {}))
-    return f"<table>{rows}</table>"
+def _is_scalar_list(v):
+    return isinstance(v, list) and all(not isinstance(x, (dict, list)) for x in v)
 
 
-def _html_list(items, label):
+def _kv(d):
+    rows = "".join(f'<div class="k">{_h(_label(k))}</div><div class="v">{_value(v)}</div>'
+                   for k, v in d.items() if v not in (None, "", [], {}) and not str(k).startswith("_"))
+    return f'<div class="kv">{rows}</div>'
+
+
+def _value(v):
+    if isinstance(v, dict):
+        return _kv(v)
+    if _is_scalar_list(v):
+        return "<br>".join(_scalar(x) for x in v)
+    if isinstance(v, list):
+        return "".join(f'<div style="margin-bottom:8px">{_value(x)}</div>' for x in v)
+    return _scalar(v)
+
+
+def _table(rows, cols=None):
+    """List of dicts -> real table (one row per item)."""
+    cols = cols or uniq([k for r in rows for k in r if not str(k).startswith("_")])
+    head = "".join(f"<th>{_h(_label(c))}</th>" for c in cols)
+    body = "".join("<tr>" + "".join(f"<td>{_value(r.get(c, ''))}</td>" for c in cols) + "</tr>" for r in rows)
+    return f'<div class="tbl"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+
+
+def _render(d):
+    """Generic renderer: scalars -> field grid, dicts -> side-by-side panels, lists of dicts -> tables."""
+    simple, panels, blocks = [], [], []
+    for k, v in d.items():
+        if v in (None, "", [], {}) or str(k).startswith("_"):
+            continue
+        if isinstance(v, dict):
+            if all(isinstance(x, dict) for x in v.values()):  # dict of dicts -> one panel each
+                panels.append((k, "".join(
+                    f'<div class="panel"><div class="ph">{_h(_label(sk))}</div>{_kv(sv)}</div>'
+                    for sk, sv in v.items() if sv)))
+            else:
+                panels.append((k, f'<div class="panel"><div class="ph">{_h(_label(k))}</div>{_kv(v)}</div>'))
+        elif isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+            blocks.append(f"<h3>{_h(_label(k))}</h3>" + _table(v))
+        elif _is_scalar_list(v) and len(v) > 12:
+            blocks.append(f"<h3>{_h(_label(k))}</h3>" + _filter_list(v, _label(k)))
+        else:
+            simple.append((k, v))
+    out = ""
+    if simple:
+        out += '<div class="fields">' + "".join(
+            f'<div class="f{" wide" if len(str(v)) > 90 else ""}"><div class="k">{_h(_label(k))}</div>'
+            f'<div class="v">{_value(v)}</div></div>' for k, v in simple) + "</div>"
+    # dict-of-dict panels get their own heading; single panels are grouped side by side
+    for k, p in panels:
+        if p.count('class="panel"') > 1:
+            out += f"<h3>{_h(_label(k))}</h3><div class=\"panels\">{p}</div>"
+    single_html = "".join(p for k, p in panels if p.count('class="panel"') == 1)
+    if single_html:
+        out += f'<div class="panels">{single_html}</div>'
+    return out + "".join(blocks)
+
+
+def _filter_list(items, label):
     lis = "".join(f"<li>{_h(i)}</li>" for i in items)
-    return (f'<input class="filter" placeholder="filter {len(items)} {label}…" aria-label="filter">'
-            f'<ul class="list">{lis}</ul>')
+    return (f'<div><input class="filter" placeholder="filter {len(items)} {_h(label)}…" aria-label="filter">'
+            f'<div class="count">{len(items)} shown</div><ul class="list">{lis}</ul></div>')
+
+
+def _chips(items, cls="p"):
+    return '<div class="chips">' + "".join(f'<span class="chip {cls}">{_h(i)}</span>' for i in items) + "</div>"
+
+
+def _cpe_label(cpe):
+    from urllib.parse import unquote
+    parts = unquote(cpe).split(":")
+    product = parts[3] if len(parts) > 3 else cpe
+    version = parts[4] if len(parts) > 4 and parts[4] not in ("*", "-", "") else ""
+    return (product.replace("_", " ") + (" " + version if version else "")).strip()
 
 
 def _html_module(key, res):
@@ -1018,58 +1212,132 @@ def _html_module(key, res):
     if res["status"] == "error" and "reason" in res:
         return f'<p class="err">Error: {_h(res["reason"])}</p>'
     d = res["data"]
+
     if key == "registration":
         src = f'<p class="note">source: {_h(d.get("source", ""))}</p>'
         if d["registered"] is None:
-            return '<p class="big warn">● UNKNOWN</p>' + src
-        return ('<p class="big yes">● REGISTERED</p>' if d["registered"]
-                else '<p class="big no">● NOT REGISTERED</p>') + src
-    if key == "reverse_ip" and "domains" in d:
-        notes = ""
-        if d.get("hackertarget_note"):
-            notes += f'<p class="warn" style="font-size:12px">HackerTarget: {_h(d["hackertarget_note"])}</p>'
-        if d.get("added_by_shodan"):
-            notes += f'<p class="note">+{d["added_by_shodan"]} hostname(s) only seen by Shodan</p>'
-        return f'<p class="note">{d["count"]} domain(s) on {_h(d["ip"])} · {_h(d["source"])}</p>' + notes + \
-            _html_list(d["domains"], "domains")
+            return '<p class="verdict warn">● UNKNOWN</p>' + src
+        return ('<p class="verdict yes">● REGISTERED</p>' if d["registered"]
+                else '<p class="verdict no">● NOT REGISTERED</p>') + src
+
+    if key == "ip":
+        out = '<div class="fields">' + "".join(
+            f'<div class="f"><div class="k">{lbl}</div><div class="v">{"<br>".join(_h(x) for x in d.get(f, [])) or "—"}</div></div>'
+            for lbl, f in (("IPv4", "ipv4"), ("IPv6", "ipv6"))) + "</div>"
+        if d.get("geo"):
+            out += "<h3>Hosting & geolocation</h3>" + _table(
+                [dict(ip=ip, **{k: v for k, v in g.items()}) for ip, g in d["geo"].items()])
+        return out
+
     if key == "shodan":
         out = f'<p class="note">{_h(d["source"])}</p>'
         for ip, h in d["hosts"].items():
+            out += f'<h3>{_h(ip)} · {_link(h["url"], "open in Shodan") if h.get("url") else ""}</h3>'
             if "note" in h or "error" in h:
-                out += f'<p><span class="tag">{_h(ip)}</span> <span class="note">{_h(h.get("note") or h.get("error"))}</span></p>'
+                out += f'<p class="note">{_h(h.get("note") or h.get("error"))}</p>'
                 continue
-            rows = ""
+            cells = []
             if h.get("ports"):
-                rows += "<tr><th>ports</th><td>" + " ".join(
-                    f'<span class="pill ok" style="margin:0 4px 4px 0;display:inline-block">{_h(p)}</span>'
-                    for p in h["ports"]) + "</td></tr>"
-            for f in ("hostnames", "tags", "software"):
-                if h.get(f):
-                    rows += f"<tr><th>{f}</th><td>{'<br>'.join(_h(x) for x in h[f])}</td></tr>"
-            if h.get("vulns"):
-                links = " ".join(f'<a href="https://nvd.nist.gov/vuln/detail/{_h(v)}" target="_blank" '
-                                 f'rel="noopener noreferrer" style="color:var(--bad)">{_h(v)}</a>' for v in h["vulns"])
-                rows += f'<tr><th>CVEs ({h["vulns_count"]})</th><td>{links}</td></tr>'
-            rows += (f'<tr><th>shodan</th><td><a href="{_h(h["url"])}" target="_blank" '
-                     f'rel="noopener noreferrer">{_h(h["url"])}</a></td></tr>')
-            out += f'<p class="tag" style="margin:10px 0 4px">{_h(ip)}</p><table>{rows}</table>'
+                cells.append(("Open ports", _chips(h["ports"], "g"), True))
+            if h.get("software"):
+                cells.append(("Software", '<div class="chips">' + "".join(
+                    f'<span class="chip p" title="{_h(c)}">{_h(_cpe_label(c))}</span>' for c in h["software"])
+                    + "</div>", True))
+            if h.get("tags"):
+                cells.append(("Tags", _chips(h["tags"], "y"), False))
+            if h.get("hostnames"):
+                cells.append(("Hostnames", "<br>".join(_h(x) for x in h["hostnames"]), False))
+            cells.append(("Known CVEs", '<div class="chips">' + "".join(
+                f'<a class="chip r" href="https://nvd.nist.gov/vuln/detail/{_h(v)}" target="_blank" '
+                f'rel="noopener noreferrer">{_h(v)}</a>' for v in h.get("vulns", [])) + "</div>"
+                if h.get("vulns") else '<span class="yes">none reported</span>', True))
+            out += '<div class="fields">' + "".join(
+                f'<div class="f{" wide" if w else ""}"><div class="k">{_h(l)}</div><div class="v">{v}</div></div>'
+                for l, v, w in cells) + "</div>"
         return out
+
+    if key == "reverse_ip" and "domains" in d:
+        notes = ""
+        if d.get("hackertarget_note"):
+            notes += f'<p class="warn" style="font-size:13px">HackerTarget: {_h(d["hackertarget_note"])}</p>'
+        if d.get("added_by_shodan"):
+            notes += f'<p class="note">+{d["added_by_shodan"]} hostname(s) only seen by Shodan</p>'
+        return (f'<p class="note">{d["count"]} domain(s) share {_h(d["ip"])} · {_h(d["source"])}</p>' + notes
+                + _filter_list(d["domains"], "domains"))
+
     if key == "subdomains":
-        return f'<p class="note">{d["count"]} unique hostname(s) · {_h(d["source"])}</p>' + \
-            _html_list(d["subdomains"], "subdomains")
+        if not d["subdomains"]:
+            return f'<p class="note">No hostname found · {_h(d["source"])}</p>'
+        return (f'<p class="note">{d["count"]} unique hostname(s) · {_h(d["source"])}</p>'
+                + _filter_list(d["subdomains"], "subdomains"))
+
     if key == "dns":
-        rows = "".join(f'<tr><th class="tag">{_h(t)}</th><td>{"<br>".join(_h(v) for v in vals)}</td></tr>'
+        rows = "".join(f'<tr><td class="tag">{_h(t)}</td><td>{"<br>".join(_h(v) for v in vals)}</td></tr>'
                        for t, vals in d["records"].items())
-        return f'<p class="note">source: {_h(d["source"])}</p><table>{rows}</table>'
+        return (f'<p class="note">source: {_h(d["source"])}</p><div class="tbl"><table><thead><tr><th>type</th>'
+                f'<th>value</th></tr></thead><tbody>{rows}</tbody></table></div>')
+
     if key == "certs":
-        head = (f'<p class="note">{d["total"]} certificate(s) · first seen {_h(d["first_seen"])}</p>'
-                + _html_table({"issuers": {k: v for k, v in d["issuers"].items()}}))
-        rows = "".join(
-            f'<tr><th>{_h((c["logged_at"] or "?")[:10])}</th><td>{"<br>".join(_h(n) for n in c["names"][:6])}'
-            f'<br><a href="{_h(c["url"])}" target="_blank" rel="noopener noreferrer">crt.sh #{_h(c["id"])}</a></td></tr>'
-            for c in d["latest"])
-        return head + f'<p class="note" style="margin-top:12px">Latest certificates</p><table>{rows}</table>'
-    return _html_table(d)
+        if not d["total"]:
+            return f'<p class="note">{_h(d.get("note") or "No certificate found")} · {_h(d["source"])}</p>'
+        out = (f'<div class="fields"><div class="f"><div class="k">certificates</div><div class="v">{d["total"]}</div></div>'
+               f'<div class="f"><div class="k">first seen</div><div class="v">{_scalar(d["first_seen"])}</div></div>'
+               f'<div class="f"><div class="k">source</div><div class="v">{_h(d["source"])}</div></div>'
+               f'<div class="f wide"><div class="k">issuers</div><div class="v">'
+               + _chips([f"{k} ({v})" for k, v in d["issuers"].items()]) + "</div></div></div>")
+        rows = [{"logged": _scalar((c["logged_at"] or "?")[:10]), "valid until": (c["not_after"] or "")[:10],
+                 "names": c["names"][:8], "issuer": re.sub(r".*O=", "", c["issuer"] or "").split(",")[0].strip('"'),
+                 "link": c["url"]} for c in d["latest"]]
+        return out + "<h3>Latest certificates</h3>" + _table(rows)
+
+    if key == "whois":
+        d = dict(d)
+        contacts = d.pop("contacts", {})
+        priv = d.pop("privacy", None)
+        out = (f'<p class="warn">🔒 {_h(priv)}</p>' if priv else "") + _render(d)
+        if contacts:
+            out += "<h3>Contacts</h3><div class=\"panels\">" + "".join(
+                f'<div class="panel"><div class="ph">{_h(_label(r))}</div>{_kv(c)}</div>' for r, c in contacts.items()) + "</div>"
+        return out
+
+    if key == "reputation":
+        score = d.get("reputation_score")
+        cls = "yes" if isinstance(score, (int, float)) and score >= 70 else "no"
+        out = f'<p class="verdict {cls}">{_h(score)} / 100</p>' if score is not None else ""
+        for w in d.get("warnings", []):
+            out += f'<div class="panel" style="margin-bottom:10px"><div class="ph">{_h(w["test"])}</div>' + \
+                "<br>".join(f'<span class="warn">⚠ {_h(x)}</span>' for x in w["warnings"]) + "</div>"
+        return out or _render(d)
+
+    if key == "history":
+        out = f'<p class="note">{_h(d.get("total_records", 0))} historical record(s) · WhoisFreaks</p>'
+        if d.get("distinct_registrants"):
+            out += "<h3>Distinct registrants over time</h3><div class=\"panels\">" + "".join(
+                f'<div class="panel">{_kv(o)}</div>' for o in d["distinct_registrants"]) + "</div>"
+        rows = []
+        for r in d.get("records", []):
+            reg = r.get("registrant") or {}
+            rows.append({
+                "captured": (r.get("query_time") or "")[:10],
+                "registrar": r.get("registrar", ""),
+                "created": (r.get("created") or "")[:10],
+                "expires": (r.get("expires") or "")[:10],
+                "registrant": [x for x in (reg.get("name"), reg.get("company"), reg.get("email_address"),
+                                           ", ".join(y for y in (reg.get("city"), reg.get("country_name")) if y)) if x],
+                "name servers": r.get("name_servers", []),
+            })
+        if rows:
+            out += "<h3>Timeline</h3>" + _table(rows)
+        return out
+
+    if key == "exposure":
+        total = d.get("total_events", 0)
+        out = (f'<p class="verdict {"no" if total else "yes"}">{"⚠ " if total else "✔ "}{_h(d.get("verdict", ""))}</p>'
+               f'<p class="note">period {_h(d.get("period", ""))} · {_h(d.get("source", ""))}</p>')
+        rest = {k: v for k, v in d.items() if k not in ("total_events", "verdict", "period", "source")}
+        return out + (_render(rest) if rest else "")
+
+    return _render(d)
 
 
 def _kpis(rep):
@@ -1097,10 +1365,9 @@ def _kpis(rep):
             tiles.append(("Open ports", len({p for h in hosts for p in h.get("ports", [])}), False))
             cves = len({v for h in hosts for v in h.get("vulns", [])})
             tiles.append(("Known CVEs", cves, cves > 0))
-    if data("exposure") and data("exposure").get("summary"):
-        t = data("exposure")["summary"].get("total_events")
-        if t is not None:
-            tiles.append(("Exposure events", t, bool(t)))
+    if data("exposure") and "total_events" in data("exposure"):
+        t = data("exposure")["total_events"]
+        tiles.append(("Exposure events", t, bool(t)))
     if data("reputation") and data("reputation").get("reputation_score") is not None:
         s = data("reputation")["reputation_score"]
         tiles.append(("Reputation", s, isinstance(s, (int, float)) and s < 70))
@@ -1113,24 +1380,27 @@ def _kpis(rep):
 def to_html(reports):
     multi = len(reports) > 1
     title = "WebOSINT report — " + (reports[0]["domain"] if not multi else f"{len(reports)} domains")
+    dot = {"ok": "var(--neon2)", "skipped": "var(--warn)", "error": "var(--bad)"}
     parts = []
     for i, rep in enumerate(reports):
         cards = []
         for n, (key, res) in enumerate(rep["modules"].items(), 1):
             st = res["status"]
             cards.append(
-                f'<details class="card" id="d{i}-{key}" open><summary><span class="n">[{n:02d}]</span>'
-                f'<span class="t">{_h(MOD_INDEX[key][1])}</span><span class="s">{res["elapsed"]}s</span>'
-                f'<span class="pill {st}">{st}</span></summary>'
+                f'<details class="card st-{st}" id="d{i}-{key}" open><summary>'
+                f'<span class="n">[{n:02d}]</span><span class="tt"><div class="t">{_h(MOD_INDEX[key][1])}</div>'
+                f'<div class="d">{_h(MOD_INDEX[key][3])}</div></span>'
+                f'<span class="s">{res["elapsed"]}s</span><span class="pill {st}">{st}</span>'
+                f'<span class="chev">▶</span></summary>'
                 f'<div class="body">{_html_module(key, res)}</div></details>')
-        nav = "".join(f'<a href="#d{i}-{k}">{_h(k)}</a>' for k in rep["modules"])
+        nav = "".join(f'<a href="#d{i}-{k}"><span class="dot" style="background:{dot[r["status"]]}"></span>{_h(k)}</a>'
+                      for k, r in rep["modules"].items())
         parts.append(
-            f'<section class="domain" id="dom{i}"><header><div class="brand">W3b0s1nt // domain intelligence</div>'
-            f'<h1>{_h(rep["domain"])}</h1><div class="meta">generated <b>{_h(rep["generated_at"])}</b> · '
-            f'scan time <b>{rep["elapsed"]}s</b> · {len(rep["modules"])} modules · passive recon</div></header>'
-            f'<nav>{nav}<a href="#" id="toggle" style="margin-left:auto">expand / collapse all</a></nav>'
-            .replace('id="toggle"', 'id="toggle"' if i == 0 else 'class="tg"')
-            + f'<div class="kpis">{_kpis(rep)}</div><div class="grid">{"".join(cards)}</div></section>')
+            f'<section class="domain"><div class="hero"><div class="brand">W3b0s1nt // domain intelligence</div>'
+            f'<h1>{_h(rep["domain"])}</h1><div class="meta">generated <b>{_h(rep["generated_at"].replace("T", " "))}</b> · '
+            f'scan time <b>{rep["elapsed"]}s</b> · {len(rep["modules"])} modules · passive recon</div></div>'
+            f'<nav>{nav}<span class="sp"></span><a href="#" class="toggle">expand / collapse all</a></nav>'
+            f'<div class="kpis">{_kpis(rep)}</div><div class="stack">{"".join(cards)}</div></section>')
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<meta name="generator" content="WebOSINT {VERSION}"><title>{_h(title)}</title>'
@@ -1138,6 +1408,7 @@ def to_html(reports):
             f'<footer>generated by <b>WebOSINT v{VERSION}</b> · '
             f'<a href="https://github.com/C3n7ral051nt4g3ncy/WebOSINT">github.com/C3n7ral051nt4g3ncy/WebOSINT</a>'
             f' · passive OSINT — verify before acting</footer></div><script>{HTML_JS}</script></body></html>')
+
 
 # --------------------------------------------------------------------------- #
 # Interactive mode (no arguments)

@@ -135,7 +135,8 @@ python3 webosint.py -f domains.txt --html case_42.html     # several domains in 
 A single self-contained file (no internet or external fonts needed), easy to attach to a case file or share with a client:
 
 - **Summary tiles:** registration, IPs, subdomains, certificates, co-hosted domains, exposure events, reputation
-- **One card per module** with status, timing and results; fold/unfold each card or all at once
+- **One full-width block per module**, in scan order, with status, timing, a short description and results laid out as field tiles, side-by-side contact panels and real tables (DNS, certificates, WHOIS history timeline, exposure months)
+- **Sticky navigation bar** with a status dot per module; fold/unfold each block or all at once
 - **Live filter** on long lists (subdomains, reverse IP)
 - **Clickable** crt.sh certificate links
 - **Responsive** (works on a phone) and **print-friendly**
@@ -174,14 +175,14 @@ Every scan queries **[Shodan InternetDB](https://internetdb.shodan.io/)** for ea
 | 4 | `reverse_ip` | Other domains on the same IP: shared hosting, sister sites, related infrastructure. HackerTarget results **plus** hostnames Shodan saw on that IP; Shodan takes over automatically when HackerTarget's free quota runs out | HackerTarget · Shodan | optional |
 | 5 | `dns` | A, AAAA, CNAME, MX (mail provider), NS, TXT (SPF, site verifications for Google/Microsoft/etc.), SOA, CAA, DMARC | local resolver (dnspython) | — |
 | 6 | `whois` | Registrar (+ IANA ID), creation/expiry/update dates, status, name servers, DNSSEC, registrant/abuse contacts when not redacted | RDAP · WHOIS fallback | — |
-| 7 | `certs` | Number of certificates, first-seen date (a good proxy for when the site went live), issuers, latest certs | crt.sh | — |
-| 8 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh | — |
+| 7 | `certs` | Number of certificates, first-seen date (a good proxy for when the site went live), issuers, latest certs | crt.sh · Cert Spotter | — |
+| 8 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh · Cert Spotter | — |
 | 9 | `reputation` | Reputation score plus failed security tests (malware, SSL, mail config) | WhoisXML | required |
 | 10 | `history` | Past registrars and registrant details over time, often revealing the owner before privacy protection was turned on | WhoisFreaks | required |
 | 11 | `exposure` | Infostealer and data-breach exposure linked to the domain over the last 12 months (employee vs client events, first/last seen) | [Lunar Domain Exposure API](https://docs.webz.io/docs/webz/domain-exposure-api) | — |
 
 > [!NOTE]
-> crt.sh is fetched **once** and shared between `certs` and `subdomains`, with automatic retries. It is a free community service and is often overloaded; if it fails, run `-m certs,subdomains` again a minute later.
+> Certificate Transparency data is fetched **once** and shared between `certs` and `subdomains`. crt.sh is tried first; when it is overloaded, down or answers 404, WebOSINT switches automatically to **[Cert Spotter](https://sslmate.com/certspotter/)** (free, no key).
 
 ---
 
@@ -247,7 +248,7 @@ pip3 install python-whois
 <details>
 <summary><b>Certificates / Subdomains fail with a network or non-JSON error</b></summary>
 
-crt.sh is overloaded. Wait a minute and run `python3 webosint.py example.com -m certs,subdomains`. You can also raise the timeout with `-t 60`.
+WebOSINT already falls back to Cert Spotter when crt.sh fails. If both fail (Cert Spotter allows a limited number of free queries per hour), wait a bit and run `python3 webosint.py example.com -m certs,subdomains`, or raise the timeout with `-t 60`.
 </details>
 
 <details>
@@ -272,6 +273,9 @@ Use `--full`, or export with `-o result.json` / `--md report.md`. Exports always
 
 ## ✨ What's new in v3.1
 
+- 🧱 **Redesigned HTML report.** One full-width block per module, field tiles, contact panels, real tables (WHOIS history timeline, certificates, exposure months), sticky navigation; works on phones.
+- 🛟 **Cert Spotter backup** for certificates/subdomains when crt.sh fails.
+- 🧹 **Exposure card shows only what matters:** a clear verdict, non-zero figures and active months (the full Lunar answer stays in the JSON export).
 - <img src="https://cdn.jsdelivr.net/gh/selfhst/icons/svg/shodan.svg" height="14" alt=""> **Shodan InternetDB (free, no key).** New `shodan` module on every scan: open ports, software, tags and known CVEs per IP (CVE links to NVD in the HTML report, new *Open ports* / *Known CVEs* tiles). Shodan also backs up and enriches reverse IP, so results keep coming when HackerTarget's free quota is used up.
 - 🧾 **RDAP support.** WHOIS and registration checks now query **RDAP** first (the structured JSON successor of WHOIS, mandatory for every gTLD) and fall back to classic WHOIS. New gTLDs such as `.sarl`, `.app`, `.xyz` or `.paris`, which python-whois can't read, now return full results.
 - 🔐 **API keys stay private.** `config.json` is no longer tracked by git (template: `config.example.json`) and is excluded from Docker builds.
@@ -296,7 +300,7 @@ Use `--full`, or export with `-o result.json` / `--md report.md`. Exports always
 
 Ideas, bug reports and PRs are welcome. Open an [issue](https://github.com/C3n7ral051nt4g3ncy/WebOSINT/issues) or start a thread in the [discussions](https://github.com/C3n7ral051nt4g3ncy/webosint/discussions).
 
-Adding a module is simple. Write a function `mod_xxx(ctx)` that returns a dict, then register it in the `MODULES` list in `webosint.py`. The shared `ctx` gives you an HTTP session with retries, plus cached WHOIS, IP and crt.sh lookups.
+Adding a module is simple. Write a function `mod_xxx(ctx)` that returns a dict, then register it in the `MODULES` list in `webosint.py`. The shared `ctx` gives you an HTTP session with retries, plus cached RDAP/WHOIS, IP, Shodan and Certificate Transparency lookups.
 
 ---
 
@@ -308,7 +312,7 @@ This tool is for the OSINT and cyber community. Don't use it for wrong, immoral,
 
 ## 🙏 Credits
 
-- [Hacker Target](https://hackertarget.com), [WhoisXML](https://main.whoisxmlapi.com), [WhoisFreaks](https://whoisfreaks.com), [crt.sh](https://crt.sh), [ipinfo.io](https://ipinfo.io), [ipapi.co](https://ipapi.co), [Shodan](https://www.shodan.io) (InternetDB) and [Lunar / Webz.io](https://docs.webz.io/docs/webz/domain-exposure-api) for their APIs and free tiers
+- [Hacker Target](https://hackertarget.com), [WhoisXML](https://main.whoisxmlapi.com), [WhoisFreaks](https://whoisfreaks.com), [crt.sh](https://crt.sh), [Cert Spotter](https://sslmate.com/certspotter/), [ipinfo.io](https://ipinfo.io), [ipapi.co](https://ipapi.co), [Shodan](https://www.shodan.io) (InternetDB) and [Lunar / Webz.io](https://docs.webz.io/docs/webz/domain-exposure-api) for their APIs and free tiers
 - [@cipher387](https://github.com/cipher387) / [@cyb_detective](https://twitter.com/cyb_detective) and [Euler Neto](https://github.com/netoeuler) for testing the first release
 - [@scorpix06](https://github.com/scorpix06) for the original Docker support
 - Shodan icon from [selfh.st/icons](https://selfh.st/icons/) (CC BY 4.0). Shodan is a trademark of its owner; WebOSINT is not affiliated with Shodan
