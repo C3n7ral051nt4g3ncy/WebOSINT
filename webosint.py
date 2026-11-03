@@ -91,6 +91,16 @@ KEY_ENV = {
 
 def load_keys(path=CONFIG_FILE):
     cfg = {}
+    example = os.path.join(os.path.dirname(os.path.abspath(path)), "config.example.json")
+    if not os.path.exists(path) and os.path.exists(example):
+        # first run: create your private config.json from the template (it is git-ignored)
+        try:
+            with open(example, encoding="utf-8") as src, open(path, "w", encoding="utf-8") as dst:
+                dst.write(src.read())
+            print(f"{C.D}[i] Created {path} from config.example.json; add your API keys there "
+                  f"(this file is never committed).{C.X}", file=sys.stderr)
+        except OSError:
+            pass
     if os.path.exists(path):
         try:
             with open(path, encoding="utf-8") as fh:
@@ -210,6 +220,16 @@ class Context:
             r.raise_for_status()
             return r.json()
         return self.cached("rdap", fetch)
+
+    def internetdb(self, ip):
+        """Shodan InternetDB: free, no key. Returns {} when Shodan has no data on the IP."""
+        def fetch():
+            r = self.session.get(f"https://internetdb.shodan.io/{ip}", timeout=self.timeout)
+            if r.status_code == 404:
+                return {}
+            r.raise_for_status()
+            return r.json()
+        return self.cached(f"internetdb:{ip}", fetch)
 
     def ips(self):
         def resolve():
@@ -390,15 +410,76 @@ def mod_reverse_ip(ctx):
         raise SkipModule("domain does not resolve")
     if not ips:
         raise SkipModule("no IPv4 address")
-    params = {"q": ips[0]}
+    ip = ips[0]
+
+    # 1) HackerTarget: free tier (20/day) or your key if config.json has one
+    ht_domains, ht_error = [], None
+    params = {"q": ip}
     if ctx.keys["HACKERTARGET_API_KEY"]:
         params["apikey"] = ctx.keys["HACKERTARGET_API_KEY"]
-    text = ctx.get("https://api.hackertarget.com/reverseiplookup/", params=params).text.strip()
-    if text.lower().startswith(("api count exceeded", "error")):
-        return {"ip": ips[0], "error": text}
-    domains = [l.strip() for l in text.splitlines() if l.strip()]
-    return {"ip": ips[0], "count": len(domains), "domains": domains,
-            "source": "HackerTarget (API key)" if "apikey" in params else "HackerTarget (free tier)"}
+    try:
+        text = ctx.get("https://api.hackertarget.com/reverseiplookup/", params=params).text.strip()
+        if text.lower().startswith(("api count exceeded", "error", "no dns a records")):
+            ht_error = text.splitlines()[0]
+        else:
+            ht_domains = [l.strip().lower() for l in text.splitlines() if l.strip()]
+    except Exception as exc:
+        ht_error = f"{exc.__class__.__name__}: {exc}"
+
+    # 2) Shodan InternetDB: always queried, free, no key (backup + extra hostnames)
+    sh_domains, sh_error = [], None
+    try:
+        sh_domains = [h.lower() for h in ctx.internetdb(ip).get("hostnames", [])]
+    except Exception as exc:
+        sh_error = f"{exc.__class__.__name__}: {exc}"
+
+    domains = uniq(ht_domains + sh_domains)
+    sources = []
+    if ht_domains:
+        sources.append("HackerTarget (API key)" if "apikey" in params else "HackerTarget (free tier)")
+    if sh_domains:
+        sources.append("Shodan InternetDB")
+    out = {"ip": ip, "count": len(domains), "domains": domains,
+           "source": " + ".join(sources) or "none"}
+    extra = [d for d in sh_domains if d not in set(ht_domains)]
+    if ht_domains and extra:
+        out["added_by_shodan"] = len(extra)
+    if ht_error:
+        out["hackertarget_note"] = ht_error + ("  → Shodan used as backup" if sh_domains else "")
+    if not domains:
+        out["error"] = "; ".join(x for x in (ht_error, sh_error) if x) or "no co-hosted domains found"
+    return out
+
+
+def mod_shodan(ctx):
+    """Open ports, software (CPE), tags and known CVEs per IP (Shodan InternetDB, free, no key)."""
+    try:
+        ips = ctx.ips()["ipv4"]
+    except socket.gaierror:
+        raise SkipModule("domain does not resolve")
+    if not ips:
+        raise SkipModule("no IPv4 address")
+    hosts = {}
+    for ip in ips[:3]:
+        try:
+            d = ctx.internetdb(ip)
+        except Exception as exc:
+            hosts[ip] = {"error": f"{exc.__class__.__name__}: {exc}"}
+            continue
+        if not d:
+            hosts[ip] = {"note": "no data in Shodan for this IP"}
+            continue
+        vulns = sorted(d.get("vulns", []), reverse=True)
+        hosts[ip] = {k: v for k, v in {
+            "ports": sorted(d.get("ports", [])),
+            "hostnames": d.get("hostnames", []),
+            "tags": d.get("tags", []),
+            "software": d.get("cpes", []),
+            "vulns_count": len(vulns),
+            "vulns": vulns,
+            "url": f"https://www.shodan.io/host/{ip}",
+        }.items() if v not in ([], None)}
+    return {"hosts": hosts, "source": "Shodan InternetDB (free, non-commercial use)"}
 
 
 DNS_TYPES = ("A", "AAAA", "CNAME", "MX", "NS", "TXT", "SOA", "CAA")
@@ -599,7 +680,8 @@ def mod_exposure(ctx):
 MODULES = [
     ("registration", "Domain Registration", mod_registration, "Is the domain registered? (RDAP/WHOIS)"),
     ("ip",           "IP Address & Geolocation", mod_ip, "A/AAAA + ipinfo.io / ipapi.co data"),
-    ("reverse_ip",   "Reverse IP (shared hosting)", mod_reverse_ip, "Other domains on the same IP (HackerTarget)"),
+    ("shodan",       "Shodan (ports & CVEs)", mod_shodan, "Open ports, software, known CVEs (Shodan, free)"),
+    ("reverse_ip",   "Reverse IP (shared hosting)", mod_reverse_ip, "Other domains on the same IP (HackerTarget + Shodan)"),
     ("dns",          "DNS Records", mod_dns, "A, AAAA, MX, NS, TXT, SOA, CAA, DMARC"),
     ("whois",        "WHOIS / RDAP", mod_whois, "Registrar, dates, contacts (RDAP, WHOIS fallback)"),
     ("certs",        "SSL Certificates", mod_certs, "Certificate Transparency (crt.sh)"),
@@ -706,7 +788,26 @@ def print_report(report, full=False):
                       + f"{C.X}  {C.D}({d.get('source', '')}){C.X}")
         elif key == "reverse_ip" and "domains" in d:
             print(f"    {C.D}{d['count']} domain(s) on {d['ip']} — {d['source']}{C.X}")
+            if d.get("hackertarget_note"):
+                print(f"    {C.Y}HackerTarget: {d['hackertarget_note']}{C.X}")
+            if d.get("added_by_shodan"):
+                print(f"    {C.D}(+{d['added_by_shodan']} hostname(s) only seen by Shodan){C.X}")
             print_list(d["domains"], limit)
+        elif key == "shodan":
+            for ip, h in d["hosts"].items():
+                print(f"    {C.B}{ip}{C.X}")
+                if "note" in h or "error" in h:
+                    print(f"      {C.D}{h.get('note') or h.get('error')}{C.X}")
+                    continue
+                for label, field in (("ports", "ports"), ("hostnames", "hostnames"), ("tags", "tags"),
+                                     ("software", "software")):
+                    if h.get(field):
+                        print(f"      {C.D}{label:<10}{C.X} {C.G}{_fmt(h[field])}{C.X}")
+                if h.get("vulns"):
+                    shown = h["vulns"] if full else h["vulns"][:15]
+                    more = "" if full or len(h["vulns"]) <= 15 else f" … +{len(h['vulns']) - 15}"
+                    print(f"      {C.D}{'CVEs':<10}{C.X} {C.R}{h['vulns_count']}: {', '.join(shown)}{more}{C.X}")
+                print(f"      {C.D}{h['url']}{C.X}")
         elif key == "subdomains":
             print(f"    {C.D}{d['count']} unique name(s) — {d['source']}{C.X}")
             print_list(d["subdomains"], limit)
@@ -866,8 +967,35 @@ def _html_module(key, res):
         return ('<p class="big yes">● REGISTERED</p>' if d["registered"]
                 else '<p class="big no">● NOT REGISTERED</p>') + src
     if key == "reverse_ip" and "domains" in d:
-        return f'<p class="note">{d["count"]} domain(s) on {_h(d["ip"])} · {_h(d["source"])}</p>' + \
+        notes = ""
+        if d.get("hackertarget_note"):
+            notes += f'<p class="warn" style="font-size:12px">HackerTarget: {_h(d["hackertarget_note"])}</p>'
+        if d.get("added_by_shodan"):
+            notes += f'<p class="note">+{d["added_by_shodan"]} hostname(s) only seen by Shodan</p>'
+        return f'<p class="note">{d["count"]} domain(s) on {_h(d["ip"])} · {_h(d["source"])}</p>' + notes + \
             _html_list(d["domains"], "domains")
+    if key == "shodan":
+        out = f'<p class="note">{_h(d["source"])}</p>'
+        for ip, h in d["hosts"].items():
+            if "note" in h or "error" in h:
+                out += f'<p><span class="tag">{_h(ip)}</span> <span class="note">{_h(h.get("note") or h.get("error"))}</span></p>'
+                continue
+            rows = ""
+            if h.get("ports"):
+                rows += "<tr><th>ports</th><td>" + " ".join(
+                    f'<span class="pill ok" style="margin:0 4px 4px 0;display:inline-block">{_h(p)}</span>'
+                    for p in h["ports"]) + "</td></tr>"
+            for f in ("hostnames", "tags", "software"):
+                if h.get(f):
+                    rows += f"<tr><th>{f}</th><td>{'<br>'.join(_h(x) for x in h[f])}</td></tr>"
+            if h.get("vulns"):
+                links = " ".join(f'<a href="https://nvd.nist.gov/vuln/detail/{_h(v)}" target="_blank" '
+                                 f'rel="noopener noreferrer" style="color:var(--bad)">{_h(v)}</a>' for v in h["vulns"])
+                rows += f'<tr><th>CVEs ({h["vulns_count"]})</th><td>{links}</td></tr>'
+            rows += (f'<tr><th>shodan</th><td><a href="{_h(h["url"])}" target="_blank" '
+                     f'rel="noopener noreferrer">{_h(h["url"])}</a></td></tr>')
+            out += f'<p class="tag" style="margin:10px 0 4px">{_h(ip)}</p><table>{rows}</table>'
+        return out
     if key == "subdomains":
         return f'<p class="note">{d["count"]} unique hostname(s) · {_h(d["source"])}</p>' + \
             _html_list(d["subdomains"], "subdomains")
@@ -905,6 +1033,12 @@ def _kpis(rep):
         tiles.append(("Certificates", data("certs")["total"], False))
     if data("reverse_ip") and "count" in data("reverse_ip"):
         tiles.append(("Co-hosted domains", data("reverse_ip")["count"], False))
+    if data("shodan"):
+        hosts = [h for h in data("shodan")["hosts"].values() if "ports" in h or "vulns" in h]
+        if hosts:
+            tiles.append(("Open ports", len({p for h in hosts for p in h.get("ports", [])}), False))
+            cves = len({v for h in hosts for v in h.get("vulns", [])})
+            tiles.append(("Known CVEs", cves, cves > 0))
     if data("exposure") and data("exposure").get("summary"):
         t = data("exposure")["summary"].get("total_events")
         if t is not None:

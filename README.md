@@ -4,13 +4,14 @@
 
 # WebOSINT
 
-**Passive domain intelligence from your terminal: one command, ten sources, a few seconds.**
+**Passive domain intelligence from your terminal: one command, eleven sources, a few seconds.**
 
 <img src="https://img.shields.io/badge/version-3.1-purple?style=flat-square"/>
 <img src="https://img.shields.io/badge/python-3.8%2B-purple?style=flat-square&logo=python&logoColor=white"/>
 <img src="https://img.shields.io/badge/recon-passive-purple?style=flat-square"/>
 <img src="https://img.shields.io/badge/docker-ready-purple?style=flat-square&logo=docker&logoColor=white"/>
 <a href="https://github.com/C3n7ral051nt4g3ncy/webosint/blob/master/LICENSE"><img src="https://img.shields.io/badge/licence-MIT-purple?style=flat-square"/></a>
+<a href="https://internetdb.shodan.io/"><img src="https://img.shields.io/badge/powered%20by-Shodan%20InternetDB-c41b1b?style=flat-square"/></a>
 
 <a href="https://github.com/C3n7ral051nt4g3ncy"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-C3n7ral051nt4g3ncy-purple?style=for-the-badge&logo=github&logoColor=white"/></a>
 <a href="https://ko-fi.com/tacticalintelanalyst"><img alt="Ko-fi" src="https://img.shields.io/badge/Ko--fi-support-purple?style=for-the-badge&logo=ko-fi&logoColor=white"/></a>
@@ -28,7 +29,7 @@ WebOSINT is a Python tool for **passive reconnaissance on a domain**. Give it a 
 
 - ⚡ **Fast.** All modules run in parallel, so a full scan takes seconds.
 - 🧭 **Simple.** Run it with no arguments for a guided menu, or script it from the command line.
-- 🔑 **No key required to start.** Seven of the ten modules are free. Modules whose key is missing are skipped, not fatal.
+- 🔑 **No key required to start.** Nine of the eleven modules are free, Shodan included. Modules whose key is missing are skipped, not fatal.
 - 📄 **Report-ready.** Export a futuristic **HTML report**, **JSON** for your pipeline, or **Markdown** for your case notes.
 - 📚 **Batch mode.** Feed it a list of domains.
 
@@ -96,12 +97,13 @@ python3 webosint.py example.com -m subdomains --json | jq -r '.modules.subdomain
 <summary><b>Example output</b></summary>
 
 ```text
-▶ Target: example.com  (10 modules in parallel)
+▶ Target: example.com  (11 modules in parallel)
   ✔ Domain Registration              0.6s
   ✔ DNS Records                      0.3s
   ✔ IP Address & Geolocation         0.9s
+  ✔ Shodan (ports & CVEs)            0.7s
   ✔ Reverse IP (shared hosting)      1.2s
-  ✔ WHOIS                            0.6s
+  ✔ WHOIS / RDAP                     0.6s
   ✔ Credential Exposure              2.1s
   ✔ SSL Certificates                 6.4s
   ✔ Subdomains                       6.4s
@@ -145,20 +147,38 @@ In interactive mode, WebOSINT asks *"Save an HTML report?"* at the end. Press En
 
 ---
 
+## <img src="https://cdn.jsdelivr.net/gh/selfhst/icons/svg/shodan.svg" height="26" alt="Shodan" align="top"> Shodan, built in
+
+Every scan queries **[Shodan InternetDB](https://internetdb.shodan.io/)** for each IP of the domain. It's **free, needs no account or API key**, and is updated weekly:
+
+| What you get | Why it matters |
+|---|---|
+| **Open ports** | 22 (SSH), 3389 (RDP), 3306/5432 (databases), 8080/8443 (admin panels) reveal the real attack surface behind a website |
+| **Software (CPE)** | Exact products and versions, e.g. `nginx 1.18.0`, `OpenSSH 8.2` |
+| **Known CVEs** | Vulnerabilities Shodan associates with those versions, linked to NVD in the HTML report |
+| **Tags** | `cdn`, `cloud`, `vpn`, `self-signed`, `honeypot`, … for quick context on the infrastructure |
+| **Hostnames** | Names seen on the IP: also used as **backup and enrichment for reverse IP** |
+
+> [!NOTE]
+> InternetDB is free for **non-commercial use**. Commercial use requires a Shodan enterprise licence. CVEs are inferred from software versions: confirm them before drawing conclusions.
+
+---
+
 ## 🧩 Modules
 
 | # | Module | What it reveals for the investigation | Source | Key |
 |:-:|---|---|---|:-:|
 | 1 | `registration` | Whether the domain is registered (available, parked, or recently dropped domains) | RDAP · WHOIS | — |
 | 2 | `ip` | IPv4/IPv6, hosting provider, ASN, geolocation, cross-checked by two services | DNS · ipinfo.io · ipapi.co | — |
-| 3 | `reverse_ip` | Other domains on the same IP: shared hosting, sister sites, related infrastructure | HackerTarget | optional |
-| 4 | `dns` | A, AAAA, CNAME, MX (mail provider), NS, TXT (SPF, site verifications for Google/Microsoft/etc.), SOA, CAA, DMARC | local resolver (dnspython) | — |
-| 5 | `whois` | Registrar (+ IANA ID), creation/expiry/update dates, status, name servers, DNSSEC, registrant/abuse contacts when not redacted | RDAP · WHOIS fallback | — |
-| 6 | `certs` | Number of certificates, first-seen date (a good proxy for when the site went live), issuers, latest certs | crt.sh | — |
-| 7 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh | — |
-| 8 | `reputation` | Reputation score plus failed security tests (malware, SSL, mail config) | WhoisXML | required |
-| 9 | `history` | Past registrars and registrant details over time, often revealing the owner before privacy protection was turned on | WhoisFreaks | required |
-| 10 | `exposure` | Infostealer and data-breach exposure linked to the domain over the last 12 months (employee vs client events, first/last seen) | [Lunar Domain Exposure API](https://docs.webz.io/docs/webz/domain-exposure-api) | — |
+| 3 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons/svg/shodan.svg" height="14" alt=""> `shodan` | Open ports, detected software (CPE), tags (cdn, cloud, vpn, self-signed…) and **known CVEs** for each IP; exposed admin/SSH/DB ports often matter more than the website | [Shodan InternetDB](https://internetdb.shodan.io/) | — |
+| 4 | `reverse_ip` | Other domains on the same IP: shared hosting, sister sites, related infrastructure. HackerTarget results **plus** hostnames Shodan saw on that IP; Shodan takes over automatically when HackerTarget's free quota runs out | HackerTarget · Shodan | optional |
+| 5 | `dns` | A, AAAA, CNAME, MX (mail provider), NS, TXT (SPF, site verifications for Google/Microsoft/etc.), SOA, CAA, DMARC | local resolver (dnspython) | — |
+| 6 | `whois` | Registrar (+ IANA ID), creation/expiry/update dates, status, name servers, DNSSEC, registrant/abuse contacts when not redacted | RDAP · WHOIS fallback | — |
+| 7 | `certs` | Number of certificates, first-seen date (a good proxy for when the site went live), issuers, latest certs | crt.sh | — |
+| 8 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh | — |
+| 9 | `reputation` | Reputation score plus failed security tests (malware, SSL, mail config) | WhoisXML | required |
+| 10 | `history` | Past registrars and registrant details over time, often revealing the owner before privacy protection was turned on | WhoisFreaks | required |
+| 11 | `exposure` | Infostealer and data-breach exposure linked to the domain over the last 12 months (employee vs client events, first/last seen) | [Lunar Domain Exposure API](https://docs.webz.io/docs/webz/domain-exposure-api) | — |
 
 > [!NOTE]
 > crt.sh is fetched **once** and shared between `certs` and `subdomains`, with automatic retries. It is a free community service and is often overloaded; if it fails, run `-m certs,subdomains` again a minute later.
@@ -167,7 +187,9 @@ In interactive mode, WebOSINT asks *"Save an HTML report?"* at the end. Press En
 
 ## 🔑 API keys
 
-Keys are **optional**. Put them in `config.json` **or** export them as environment variables, which is handy for Docker or CI and keeps keys out of git.
+Keys are **optional**. Put them in `config.json` **or** export them as environment variables (handy for Docker or CI).
+
+`config.json` is **your private file**: it is git-ignored and Docker-ignored, so your keys never get pushed or baked into an image. The repo only ships the template `config.example.json`, and WebOSINT creates `config.json` from it on first run (or do it yourself: `cp config.example.json config.json`).
 
 ```json
 {
@@ -181,14 +203,14 @@ Keys are **optional**. Put them in `config.json` **or** export them as environme
 |---|---|---|---|---|
 | [WhoisXML](https://whois.whoisxmlapi.com) | 500 requests | `WHOIS_XML_API_KEY` | `WEBOSINT_WHOISXML_KEY` | `reputation` |
 | [WhoisFreaks](https://whoisfreaks.com) | 100 requests | `WHOIS_FREAKS_API_KEY` | `WEBOSINT_WHOISFREAKS_KEY` | `history` |
-| [HackerTarget](https://hackertarget.com/scan-membership/) | a few lookups/day | `HACKERTARGET_API_KEY` | `WEBOSINT_HACKERTARGET_KEY` | unlimited `reverse_ip` |
+| [HackerTarget](https://hackertarget.com/scan-membership/) | 20 lookups/day, 50 results each (no key) | `HACKERTARGET_API_KEY` | `WEBOSINT_HACKERTARGET_KEY` | more `reverse_ip` results (paid membership) |
 
 ```bash
 WEBOSINT_WHOISXML_KEY=xxxx WEBOSINT_WHOISFREAKS_KEY=yyyy python3 webosint.py example.com
 ```
 
 > [!WARNING]
-> Never commit a `config.json` that contains your real keys. Run `git diff config.json` before pushing, or use the environment variables.
+> Never put real keys in `config.example.json`, because that file **is** committed.
 
 ---
 
@@ -237,7 +259,7 @@ Lunar builds the report on demand the first time a domain is requested. WebOSINT
 <details>
 <summary><b>Reverse IP says "API count exceeded"</b></summary>
 
-You've used up HackerTarget's free daily lookups. Wait, change IP, or add a HackerTarget key.
+You've used up HackerTarget's 20 free daily lookups. Nothing to do: WebOSINT automatically uses the hostnames Shodan has seen on that IP as a backup. For full reverse IP lists, wait until tomorrow or add a HackerTarget key.
 </details>
 
 <details>
@@ -250,7 +272,9 @@ Use `--full`, or export with `-o result.json` / `--md report.md`. Exports always
 
 ## ✨ What's new in v3.1
 
+- <img src="https://cdn.jsdelivr.net/gh/selfhst/icons/svg/shodan.svg" height="14" alt=""> **Shodan InternetDB (free, no key).** New `shodan` module on every scan: open ports, software, tags and known CVEs per IP (CVE links to NVD in the HTML report, new *Open ports* / *Known CVEs* tiles). Shodan also backs up and enriches reverse IP, so results keep coming when HackerTarget's free quota is used up.
 - 🧾 **RDAP support.** WHOIS and registration checks now query **RDAP** first (the structured JSON successor of WHOIS, mandatory for every gTLD) and fall back to classic WHOIS. New gTLDs such as `.sarl`, `.app`, `.xyz` or `.paris`, which python-whois can't read, now return full results.
+- 🔐 **API keys stay private.** `config.json` is no longer tracked by git (template: `config.example.json`) and is excluded from Docker builds.
 - 🎯 **No more false "not registered".** If no registry answers, WebOSINT says so (or confirms registration from DNS) instead of guessing.
 
 ## ✨ What's new in v3.0
@@ -284,9 +308,10 @@ This tool is for the OSINT and cyber community. Don't use it for wrong, immoral,
 
 ## 🙏 Credits
 
-- [Hacker Target](https://hackertarget.com), [WhoisXML](https://main.whoisxmlapi.com), [WhoisFreaks](https://whoisfreaks.com), [crt.sh](https://crt.sh), [ipinfo.io](https://ipinfo.io), [ipapi.co](https://ipapi.co) and [Lunar / Webz.io](https://docs.webz.io/docs/webz/domain-exposure-api) for their APIs and free tiers
+- [Hacker Target](https://hackertarget.com), [WhoisXML](https://main.whoisxmlapi.com), [WhoisFreaks](https://whoisfreaks.com), [crt.sh](https://crt.sh), [ipinfo.io](https://ipinfo.io), [ipapi.co](https://ipapi.co), [Shodan](https://www.shodan.io) (InternetDB) and [Lunar / Webz.io](https://docs.webz.io/docs/webz/domain-exposure-api) for their APIs and free tiers
 - [@cipher387](https://github.com/cipher387) / [@cyb_detective](https://twitter.com/cyb_detective) and [Euler Neto](https://github.com/netoeuler) for testing the first release
 - [@scorpix06](https://github.com/scorpix06) for the original Docker support
+- Shodan icon from [selfh.st/icons](https://selfh.st/icons/) (CC BY 4.0). Shodan is a trademark of its owner; WebOSINT is not affiliated with Shodan
 
 <br>
 
