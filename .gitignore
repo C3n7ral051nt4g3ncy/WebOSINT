@@ -6,3 +6,5 @@ __pycache__/
 *.md
 !README.md
 !webosint_screenshots.md
+*.html
+.DS_Store

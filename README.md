@@ -16,7 +16,7 @@
 <a href="https://ko-fi.com/tacticalintelanalyst"><img alt="Ko-fi" src="https://img.shields.io/badge/Ko--fi-support-purple?style=for-the-badge&logo=ko-fi&logoColor=white"/></a>
 <a href="https://user-images.githubusercontent.com/104733166/171052611-1f76b07c-832f-4a4a-9a0a-2f94595c28c9.png"><img alt="BTC" src="https://img.shields.io/badge/Bitcoin-donate-purple?style=for-the-badge&logo=bitcoin&logoColor=white"/></a>
 
-[Quick start](#-quick-start) · [Usage](#-usage) · [Modules](#-modules) · [API keys](#-api-keys) · [Docker](#-docker) · [Troubleshooting](#-troubleshooting) · [Changelog](#-whats-new-in-v30)
+[Quick start](#-quick-start) · [Usage](#-usage) · [HTML report](#-html-report) · [Modules](#-modules) · [API keys](#-api-keys) · [Docker](#-docker) · [Troubleshooting](#-troubleshooting) · [Changelog](#-whats-new-in-v30)
 
 </div>
 
@@ -29,7 +29,7 @@ WebOSINT is a Python tool for **passive reconnaissance on a domain**. Give it a 
 - ⚡ **Fast.** All modules run in parallel, so a full scan takes seconds.
 - 🧭 **Simple.** Run it with no arguments for a guided menu, or script it from the command line.
 - 🔑 **No key required to start.** Seven of the ten modules are free. Modules whose key is missing are skipped, not fatal.
-- 📄 **Report-ready.** Export to **JSON** for your pipeline or **Markdown** for your case notes.
+- 📄 **Report-ready.** Export a futuristic **HTML report**, **JSON** for your pipeline, or **Markdown** for your case notes.
 - 📚 **Batch mode.** Feed it a list of domains.
 
 ---
@@ -57,6 +57,7 @@ python3 webosint.py example.com                          # every module
 python3 webosint.py https://www.example.com/page         # URLs are cleaned automatically
 python3 webosint.py example.com -m dns,whois,subdomains  # only these (names or numbers: -m 4,5,7)
 python3 webosint.py example.com -x reverse_ip,history    # everything except these
+python3 webosint.py example.com --html --open             # HTML report, opened in your browser
 python3 webosint.py example.com -o result.json --md report.md
 python3 webosint.py -f domains.txt -o results.json       # batch, one domain per line
 python3 webosint.py --list                               # show modules
@@ -78,6 +79,8 @@ python3 webosint.py example.com -m subdomains --json | jq -r '.modules.subdomain
 | `-m`, `--modules` | Modules to run: comma list of names or numbers |
 | `-x`, `--exclude` | Modules to skip |
 | `-o`, `--output` | Save results as JSON |
+| `--html [FILE]` | Save a self-contained HTML report (default name `webosint_<domain>_<date>.html`) |
+| `--open` | Open the HTML report in your browser when the scan ends |
 | `--md` | Save results as a Markdown report |
 | `--json` | Print raw JSON to stdout (no banner, no colours) |
 | `--full` | Don't truncate long lists (reverse IP, subdomains) in the terminal |
@@ -120,6 +123,28 @@ python3 webosint.py example.com -m subdomains --json | jq -r '.modules.subdomain
 
 ---
 
+## 🖥️ HTML report
+
+```bash
+python3 webosint.py example.com --html --open
+python3 webosint.py -f domains.txt --html case_42.html     # several domains in one report
+```
+
+A single self-contained file (no internet or external fonts needed), easy to attach to a case file or share with a client:
+
+- **Summary tiles:** registration, IPs, subdomains, certificates, co-hosted domains, exposure events, reputation
+- **One card per module** with status, timing and results; fold/unfold each card or all at once
+- **Live filter** on long lists (subdomains, reverse IP)
+- **Clickable** crt.sh certificate links
+- **Responsive** (works on a phone) and **print-friendly**
+- All collected data is **HTML-escaped**, so a malicious DNS record or WHOIS field can't run code in your browser
+
+In interactive mode, WebOSINT asks *"Save an HTML report?"* at the end. Press Enter and it opens in your browser.
+
+<div align="center"><img width="800" src="docs/html-report.png" alt="WebOSINT HTML report (sample data)"></div>
+
+---
+
 ## 🧩 Modules
 
 | # | Module | What it reveals for the investigation | Source | Key |
@@ -133,7 +158,7 @@ python3 webosint.py example.com -m subdomains --json | jq -r '.modules.subdomain
 | 7 | `subdomains` | Every hostname that has appeared in a certificate: dev/staging hosts, VPNs, admin panels, forgotten services | crt.sh | — |
 | 8 | `reputation` | Reputation score plus failed security tests (malware, SSL, mail config) | WhoisXML | required |
 | 9 | `history` | Past registrars and registrant details over time, often revealing the owner before privacy protection was turned on | WhoisFreaks | required |
-| 10 | `exposure` | Infostealer and data-breach exposure linked to the domain (employee vs client events, first/last seen) | [Lunar Domain Exposure API](https://docs.webz.io/docs/webz/domain-exposure-api) | — |
+| 10 | `exposure` | Infostealer and data-breach exposure linked to the domain over the last 12 months (employee vs client events, first/last seen) | [Lunar Domain Exposure API](https://docs.webz.io/docs/webz/domain-exposure-api) | — |
 
 > [!NOTE]
 > crt.sh is fetched **once** and shared between `certs` and `subdomains`, with automatic retries. It is a free community service and is often overloaded; if it fails, run `-m certs,subdomains` again a minute later.
@@ -198,6 +223,12 @@ crt.sh is overloaded. Wait a minute and run `python3 webosint.py example.com -m 
 </details>
 
 <details>
+<summary><b>Credential Exposure says "still generating the report"</b></summary>
+
+Lunar builds the report on demand the first time a domain is requested. WebOSINT waits up to 90 seconds; if it's still not ready, run `python3 webosint.py example.com -m exposure` again a minute later.
+</details>
+
+<details>
 <summary><b>Reverse IP says "API count exceeded"</b></summary>
 
 You've used up HackerTarget's free daily lookups. Wait, change IP, or add a HackerTarget key.
@@ -215,10 +246,11 @@ Use `--full`, or export with `-o result.json` / `--md report.md`. Exports always
 
 - ⚡ **Parallel engine.** All modules run at the same time, with no more forced pauses or y/n prompts between modules.
 - 🖥️ **Real CLI.** Module selection (`-m` / `-x`), batch mode (`-f`), JSON/Markdown export, `--json` for piping.
+- 🛰️ **HTML report** (`--html`): self-contained, dark futuristic dashboard with summary tiles, filters, foldable cards; also offered at the end of interactive mode.
 - 🧭 **Interactive menu** when run without arguments.
 - 🔑 **Keys from config.json or environment variables.** Missing keys skip a module instead of breaking the run.
 - 🧬 **DNS via the local resolver** (dnspython): faster, no rate limit, adds CAA and DMARC.
-- 🕵️ **New `exposure` module** using the free Lunar Domain Exposure API ([#5](https://github.com/C3n7ral051nt4g3ncy/WebOSINT/issues/5)).
+- 🕵️ **New `exposure` module** using the free Lunar Domain Exposure API ([#5](https://github.com/C3n7ral051nt4g3ncy/WebOSINT/issues/5)). WebOSINT waits automatically while Lunar generates the report (up to 90 s).
 - 🧹 **Cleaner results.** De-duplicated subdomains (no wildcards or multi-line entries), readable certificate and WHOIS history summaries.
 - 🐞 **Fixes.** "Wrong key" exits on valid answers, WHOIS crash, ipinfo crash on missing fields, duplicate crt.sh/WHOIS requests, automatic retries on 429/5xx.
 - 🐳 **Docker** now takes arguments: `docker run --rm -it webosint example.com`.

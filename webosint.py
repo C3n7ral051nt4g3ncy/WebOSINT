@@ -15,6 +15,7 @@ Usage examples
   python3 webosint.py example.com -m dns,whois,subdomains
   python3 webosint.py example.com -x reverse_ip,history
   python3 webosint.py -f domains.txt -o results.json --md report.md
+  python3 webosint.py example.com --html --open   # futuristic HTML report
   python3 webosint.py --list                  # show available modules
 """
 
@@ -407,12 +408,29 @@ def mod_history(ctx):
     return {"total_records": d.get("total_records", len(hist)), "records": hist}
 
 
+EXPOSURE_POLL = 5        # seconds between polls
+EXPOSURE_MAX_WAIT = 90   # give up after this many seconds
+
+
 def mod_exposure(ctx):
     """Lunar Domain Exposure API (free, no key) — infostealer / breach exposure (issue #5)."""
-    d = ctx.get("https://api.lunarcyber.com/domain-exposure", params={"domain": ctx.domain},
-                timeout=max(ctx.timeout, 30)).json()
-    data = d.get("data", d) if isinstance(d, dict) else {}
-    report = data.get("report") or {}
+    # Lunar builds the report on demand: the first call returns GENERATING_REPORT,
+    # so poll the same endpoint until it is REPORT_READY (or we give up).
+    deadline = time.time() + EXPOSURE_MAX_WAIT
+    while True:
+        d = ctx.get("https://api.lunarcyber.com/domain-exposure", params={"domain": ctx.domain},
+                    timeout=max(ctx.timeout, 30)).json()
+        data = d.get("data", d) if isinstance(d, dict) else {}
+        report = data.get("report") or {}
+        status = str(data.get("status") or "").upper()
+        if report.get("summary") or status == "REPORT_READY" or "GENERAT" not in status \
+                or time.time() + EXPOSURE_POLL > deadline:
+            break
+        time.sleep(EXPOSURE_POLL)
+    if not report.get("summary") and "GENERAT" in status:
+        return {"status": data.get("status"),
+                "note": f"Lunar is still generating the report after {EXPOSURE_MAX_WAIT}s. "
+                        f"Run again in a minute: webosint.py {ctx.domain} -m exposure"}
     period = report.get("period") or {"from": data.get("periodFrom"), "to": data.get("periodTo")}
     out = {"status": data.get("status"),
            "period": {k: v for k, v in period.items() if v},
@@ -567,6 +585,210 @@ def to_markdown(reports):
 
 
 # --------------------------------------------------------------------------- #
+# HTML report (self-contained, works offline)
+# --------------------------------------------------------------------------- #
+HTML_CSS = r"""
+:root{--bg:#05060b;--panel:#0b0d17cc;--line:#1d2140;--txt:#d7dcff;--dim:#7a80a8;
+--neon:#b04cff;--neon2:#39ffb0;--warn:#ffcc4d;--bad:#ff4d6d;--mono:ui-monospace,"SF Mono",
+"JetBrains Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.55 var(--mono);
+background-image:linear-gradient(#b04cff0d 1px,transparent 1px),linear-gradient(90deg,#b04cff0d 1px,transparent 1px),
+radial-gradient(ellipse at top,#2a0f4a 0%,transparent 60%);background-size:32px 32px,32px 32px,100% 100%;
+background-attachment:fixed}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;
+background:repeating-linear-gradient(0deg,#ffffff05 0 1px,transparent 1px 3px)}
+a{color:var(--neon2);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 60px}
+header{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(6px);
+padding:22px 24px;position:relative;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px))}
+header:before{content:"";position:absolute;left:0;top:0;height:2px;width:100%;
+background:linear-gradient(90deg,var(--neon),var(--neon2),transparent);animation:scan 4s linear infinite}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.brand{color:var(--neon);letter-spacing:.35em;font-size:12px;text-transform:uppercase}
+h1{margin:6px 0 4px;font-size:clamp(22px,4vw,34px);letter-spacing:.04em;color:#fff;
+text-shadow:0 0 12px #b04cff99,0 0 30px #b04cff55;word-break:break-all}
+.meta{color:var(--dim);font-size:12px}.meta b{color:var(--neon2);font-weight:400}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+nav a{border:1px solid var(--line);padding:4px 10px;font-size:12px;color:var(--dim);background:#0b0d17}
+nav a:hover{border-color:var(--neon);color:#fff;text-decoration:none}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0 26px}
+.kpi{border:1px solid var(--line);background:var(--panel);padding:14px 16px;position:relative}
+.kpi:after{content:"";position:absolute;right:8px;top:8px;width:6px;height:6px;background:var(--neon2);
+box-shadow:0 0 8px var(--neon2)}
+.kpi .v{font-size:26px;color:#fff;text-shadow:0 0 10px #39ffb066}.kpi .l{color:var(--dim);font-size:11px;
+text-transform:uppercase;letter-spacing:.15em}
+.kpi.bad .v{color:var(--bad);text-shadow:0 0 10px #ff4d6d66}.kpi.bad:after{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px;align-items:start}
+details.card{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(6px)}
+details.card[open]{border-color:#b04cff55;box-shadow:0 0 0 1px #b04cff22,0 0 40px -20px var(--neon)}
+summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;
+border-bottom:1px solid transparent}summary::-webkit-details-marker{display:none}
+details[open] summary{border-bottom-color:var(--line)}
+summary .n{color:var(--neon);font-size:11px}summary .t{flex:1;color:#fff;letter-spacing:.05em}
+summary .s{font-size:11px;color:var(--dim)}
+.pill{font-size:10px;padding:2px 8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid}
+.ok{color:var(--neon2);border-color:#39ffb066}.skipped{color:var(--warn);border-color:#ffcc4d66}
+.error{color:var(--bad);border-color:#ff4d6d66}
+.body{padding:12px 16px 16px;overflow-x:auto}
+table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px dashed #1d214099;
+vertical-align:top;text-align:left;word-break:break-word}
+th{color:var(--dim);font-weight:400;white-space:nowrap;width:1%;padding-right:18px}
+td{color:var(--txt)}.tag{color:var(--neon);white-space:nowrap}
+.note{color:var(--dim);margin:0 0 10px;font-size:12px}.err{color:var(--bad)}.warn{color:var(--warn)}
+ul.list{list-style:none;margin:0;padding:0;max-height:420px;overflow:auto;columns:2 260px;column-gap:24px}
+ul.list li{padding:2px 0;break-inside:avoid;word-break:break-all}ul.list li:before{content:"› ";color:var(--neon)}
+input.filter{width:100%;background:#05060b;border:1px solid var(--line);color:#fff;padding:7px 10px;
+font:inherit;margin-bottom:10px;outline:none}input.filter:focus{border-color:var(--neon);box-shadow:0 0 12px -4px var(--neon)}
+.big{font-size:18px}.yes{color:var(--neon2)}.no{color:var(--bad)}
+footer{margin-top:40px;color:var(--dim);font-size:11px;text-align:center;letter-spacing:.1em}
+footer b{color:var(--neon)}
+.domain{margin-top:34px}
+@media (max-width:640px){table,tbody,tr,th,td{display:block;width:auto}th{padding:6px 0 0;border:0}
+td{padding:0 0 6px 12px}.wrap{padding:16px 12px 40px}}
+@media print{body{background:#fff;color:#000}body:after,header:before{display:none}
+details.card{break-inside:avoid}ul.list{max-height:none}}
+"""
+
+HTML_JS = r"""
+document.querySelectorAll('input.filter').forEach(function(inp){
+  inp.addEventListener('input',function(){
+    var q=inp.value.toLowerCase(),list=inp.nextElementSibling,shown=0;
+    list.querySelectorAll('li').forEach(function(li){
+      var m=li.textContent.toLowerCase().indexOf(q)>-1;li.style.display=m?'':'none';if(m)shown++;});
+    inp.setAttribute('data-count',shown);
+  });
+});
+document.getElementById('toggle').addEventListener('click',function(e){
+  e.preventDefault();var cards=document.querySelectorAll('details.card');
+  var open=[].some.call(cards,function(c){return !c.open});
+  cards.forEach(function(c){c.open=open});
+});
+"""
+
+
+def _h(v):
+    import html as _html
+    return _html.escape(str(v), quote=True)
+
+
+def _html_value(v):
+    if isinstance(v, dict):
+        return _html_table(v)
+    if isinstance(v, list):
+        if v and isinstance(v[0], dict):
+            return "".join(f'<div style="margin:6px 0 10px">{_html_table(i)}</div>' for i in v)
+        return "<br>".join(_h(x) for x in v)
+    s = str(v)
+    if s.startswith(("http://", "https://")):
+        return f'<a href="{_h(s)}" target="_blank" rel="noopener noreferrer">{_h(s)}</a>'
+    return _h(s)
+
+
+def _html_table(d):
+    rows = "".join(f"<tr><th>{_h(k.replace('_', ' '))}</th><td>{_html_value(v)}</td></tr>"
+                   for k, v in d.items() if v not in (None, "", [], {}))
+    return f"<table>{rows}</table>"
+
+
+def _html_list(items, label):
+    lis = "".join(f"<li>{_h(i)}</li>" for i in items)
+    return (f'<input class="filter" placeholder="filter {len(items)} {label}…" aria-label="filter">'
+            f'<ul class="list">{lis}</ul>')
+
+
+def _html_module(key, res):
+    if res["status"] == "skipped":
+        return f'<p class="warn">Skipped: {_h(res["reason"])}</p>'
+    if res["status"] == "error" and "reason" in res:
+        return f'<p class="err">Error: {_h(res["reason"])}</p>'
+    d = res["data"]
+    if key == "registration":
+        return ('<p class="big yes">● REGISTERED</p>' if d["registered"]
+                else '<p class="big no">● NOT REGISTERED / WHOIS UNAVAILABLE</p>')
+    if key == "reverse_ip" and "domains" in d:
+        return f'<p class="note">{d["count"]} domain(s) on {_h(d["ip"])} · {_h(d["source"])}</p>' + \
+            _html_list(d["domains"], "domains")
+    if key == "subdomains":
+        return f'<p class="note">{d["count"]} unique hostname(s) · {_h(d["source"])}</p>' + \
+            _html_list(d["subdomains"], "subdomains")
+    if key == "dns":
+        rows = "".join(f'<tr><th class="tag">{_h(t)}</th><td>{"<br>".join(_h(v) for v in vals)}</td></tr>'
+                       for t, vals in d["records"].items())
+        return f'<p class="note">source: {_h(d["source"])}</p><table>{rows}</table>'
+    if key == "certs":
+        head = (f'<p class="note">{d["total"]} certificate(s) · first seen {_h(d["first_seen"])}</p>'
+                + _html_table({"issuers": {k: v for k, v in d["issuers"].items()}}))
+        rows = "".join(
+            f'<tr><th>{_h((c["logged_at"] or "?")[:10])}</th><td>{"<br>".join(_h(n) for n in c["names"][:6])}'
+            f'<br><a href="{_h(c["url"])}" target="_blank" rel="noopener noreferrer">crt.sh #{_h(c["id"])}</a></td></tr>'
+            for c in d["latest"])
+        return head + f'<p class="note" style="margin-top:12px">Latest certificates</p><table>{rows}</table>'
+    return _html_table(d)
+
+
+def _kpis(rep):
+    m = rep["modules"]
+
+    def data(k):
+        r = m.get(k)
+        return r["data"] if r and r["status"] == "ok" else None
+
+    tiles = []
+    if data("registration") is not None:
+        tiles.append(("Registered", "YES" if data("registration")["registered"] else "NO",
+                      not data("registration")["registered"]))
+    if data("ip") and "ipv4" in data("ip"):
+        tiles.append(("IP addresses", len(data("ip")["ipv4"]) + len(data("ip").get("ipv6", [])), False))
+    if data("subdomains"):
+        tiles.append(("Subdomains", data("subdomains")["count"], False))
+    if data("certs"):
+        tiles.append(("Certificates", data("certs")["total"], False))
+    if data("reverse_ip") and "count" in data("reverse_ip"):
+        tiles.append(("Co-hosted domains", data("reverse_ip")["count"], False))
+    if data("exposure") and data("exposure").get("summary"):
+        t = data("exposure")["summary"].get("total_events")
+        if t is not None:
+            tiles.append(("Exposure events", t, bool(t)))
+    if data("reputation") and data("reputation").get("reputation_score") is not None:
+        s = data("reputation")["reputation_score"]
+        tiles.append(("Reputation", s, isinstance(s, (int, float)) and s < 70))
+    ok = sum(1 for r in m.values() if r["status"] == "ok")
+    tiles.append(("Modules OK", f"{ok}/{len(m)}", ok < len(m)))
+    return "".join(f'<div class="kpi{" bad" if bad else ""}"><div class="v">{_h(v)}</div>'
+                   f'<div class="l">{_h(l)}</div></div>' for l, v, bad in tiles)
+
+
+def to_html(reports):
+    multi = len(reports) > 1
+    title = "WebOSINT report — " + (reports[0]["domain"] if not multi else f"{len(reports)} domains")
+    parts = []
+    for i, rep in enumerate(reports):
+        cards = []
+        for n, (key, res) in enumerate(rep["modules"].items(), 1):
+            st = res["status"]
+            cards.append(
+                f'<details class="card" id="d{i}-{key}" open><summary><span class="n">[{n:02d}]</span>'
+                f'<span class="t">{_h(MOD_INDEX[key][1])}</span><span class="s">{res["elapsed"]}s</span>'
+                f'<span class="pill {st}">{st}</span></summary>'
+                f'<div class="body">{_html_module(key, res)}</div></details>')
+        nav = "".join(f'<a href="#d{i}-{k}">{_h(k)}</a>' for k in rep["modules"])
+        parts.append(
+            f'<section class="domain" id="dom{i}"><header><div class="brand">W3b0s1nt // domain intelligence</div>'
+            f'<h1>{_h(rep["domain"])}</h1><div class="meta">generated <b>{_h(rep["generated_at"])}</b> · '
+            f'scan time <b>{rep["elapsed"]}s</b> · {len(rep["modules"])} modules · passive recon</div></header>'
+            f'<nav>{nav}<a href="#" id="toggle" style="margin-left:auto">expand / collapse all</a></nav>'
+            .replace('id="toggle"', 'id="toggle"' if i == 0 else 'class="tg"')
+            + f'<div class="kpis">{_kpis(rep)}</div><div class="grid">{"".join(cards)}</div></section>')
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<meta name="generator" content="WebOSINT {VERSION}"><title>{_h(title)}</title>'
+            f'<style>{HTML_CSS}</style></head><body><div class="wrap">{"".join(parts)}'
+            f'<footer>generated by <b>WebOSINT v{VERSION}</b> · '
+            f'<a href="https://github.com/C3n7ral051nt4g3ncy/WebOSINT">github.com/C3n7ral051nt4g3ncy/WebOSINT</a>'
+            f' · passive OSINT — verify before acting</footer></div><script>{HTML_JS}</script></body></html>')
+
+# --------------------------------------------------------------------------- #
 # Interactive mode (no arguments)
 # --------------------------------------------------------------------------- #
 def interactive(keys):
@@ -625,6 +847,9 @@ def main():
     ap.add_argument("-x", "--exclude", help="comma list of modules to skip")
     ap.add_argument("-o", "--output", help="save results as JSON")
     ap.add_argument("--md", help="save results as a Markdown report")
+    ap.add_argument("--html", nargs="?", const="auto", metavar="FILE",
+                    help="save a self-contained HTML report (default name: webosint_<domain>_<date>.html)")
+    ap.add_argument("--open", action="store_true", help="open the HTML report in your browser when done")
     ap.add_argument("--json", action="store_true", help="print JSON to stdout (for piping, e.g. into jq)")
     ap.add_argument("--full", action="store_true", help="don't truncate long lists in the terminal")
     ap.add_argument("-t", "--timeout", type=int, default=20, help="per-request timeout in seconds (default 20)")
@@ -649,6 +874,7 @@ def main():
 
     keys = load_keys(args.config)
 
+    asked_html = False
     domains = list(args.domains)
     if args.file:
         with open(args.file, encoding="utf-8") as fh:
@@ -661,6 +887,7 @@ def main():
             ap.error("no domain given")
         d, selected = interactive(keys)
         domains = [d]
+        asked_html = True
     if args.exclude:
         excl = set(parse_modules(args.exclude))
         selected = [s for s in selected if s not in excl]
@@ -691,6 +918,24 @@ def main():
         with open(args.md, "w", encoding="utf-8") as fh:
             fh.write(to_markdown(reports))
         print(f"{C.G}Markdown saved → {args.md}{C.X}", file=sys.stderr)
+    if asked_html and reports and not args.html:
+        try:
+            ans = input(f"{C.P}{C.B}Save an HTML report? [Y/n]: {C.X}").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            ans = "n"
+        if ans in ("", "y", "yes", "o", "oui"):
+            args.html, args.open = "auto", True
+    if args.html and reports:
+        path = args.html
+        if path == "auto":
+            stem = reports[0]["domain"] if len(reports) == 1 else "multi"
+            path = f"webosint_{stem}_{datetime.now():%Y%m%d_%H%M}.html"
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(to_html(reports))
+        print(f"{C.G}HTML report saved → {os.path.abspath(path)}{C.X}", file=sys.stderr)
+        if args.open:
+            import webbrowser
+            webbrowser.open("file://" + os.path.abspath(path))
 
 
 if __name__ == "__main__":
